@@ -57,6 +57,7 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
     final double clearance = AppNavMetrics.clearance(
       MediaQuery.paddingOf(context).bottom,
     );
+    final Widget title = Text('Makan Mana', style: _Type.title(context));
     return SafeArea(
       bottom: false,
       child: Padding(
@@ -66,51 +67,97 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
           AppSpacing.xl,
           clearance,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            Text('Makan Mana', style: _Type.title(context)),
-            const SizedBox(height: AppSpacing.md),
-            Expanded(
-              child: switch (places) {
-                AsyncData<List<Place>>(value: final List<Place> list)
-                    when list.isEmpty =>
-                  const _Message(
-                    title: 'Nothing nearby passes these filters',
-                    body:
-                        'Lower the rating or the number of reviews to bring '
-                        'some places back.',
-                  ),
-                AsyncData<List<Place>>(value: final List<Place> list) => _live(
-                  list,
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints c) {
+            // On its side the phone is too short for the text above the
+            // wheel, so the two sit side by side (docs/decisions.md 016).
+            final bool wide = c.maxWidth > c.maxHeight;
+            if (places case AsyncData<List<Place>>(
+              value: final List<Place> list,
+            ) when list.isNotEmpty) {
+              return wide ? _wideLive(title, list) : _tallLive(title, list);
+            }
+            if (places is! AsyncData<List<Place>> &&
+                places is! AsyncError<List<Place>>) {
+              return _Loading(title: title, wide: wide);
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                title,
+                const SizedBox(height: AppSpacing.md),
+                Expanded(
+                  child: switch (places) {
+                    AsyncData<List<Place>>() => const _Message(
+                      title: 'Nothing nearby passes these filters',
+                      body:
+                          'Lower the rating or the number of reviews to bring '
+                          'some places back.',
+                    ),
+                    AsyncError<List<Place>>(:final Object error) => _failed(
+                      error,
+                    ),
+                    _ => const SizedBox.shrink(),
+                  },
                 ),
-                AsyncError<List<Place>>(:final Object error) => _failed(error),
-                _ => const _Loading(),
-              },
-            ),
-          ],
+              ],
+            );
+          },
         ),
       ),
     );
   }
 
-  Widget _live(List<Place> list) {
-    final List<String> names = <String>[for (final Place p in list) p.name];
+  String _countText(List<Place> list) => list.length == 1
+      ? '1 place on the wheel'
+      : '${list.length} places on the wheel';
+
+  String _currentName(List<Place> list) {
     final int? at = _current;
-    final String current = at != null && at < names.length ? names[at] : '';
+    return at != null && at < list.length ? list[at].name : '';
+  }
+
+  Widget _wheelOf(List<Place> list, double diameter) => SpinWheel(
+    key: _wheel,
+    names: <String>[for (final Place p in list) p.name],
+    diameter: diameter,
+    onLanded: (int i) => _landed(list[i]),
+    onCurrent: (int i) => setState(() => _current = i),
+    onSpinning: (bool on) {
+      if (on && !_spunOnce) setState(() => _spunOnce = true);
+    },
+  );
+
+  Widget _hint(TextAlign align) => AnimatedOpacity(
+    opacity: _spunOnce ? 0 : 1,
+    duration: AppMotion.long,
+    child: Text(
+      'Throw the wheel, or tap Spin',
+      textAlign: align,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      textScaler: MediaQuery.textScalerOf(
+        context,
+      ).clamp(maxScaleFactor: _hintMaxScale),
+      style: _Type.hint(context),
+    ),
+  );
+
+  /// Upright: the title, the count and the name above the wheel.
+  Widget _tallLive(Widget title, List<Place> list) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
+        title,
+        const SizedBox(height: AppSpacing.md),
         Text(
-          list.length == 1
-              ? '1 place on the wheel'
-              : '${list.length} places on the wheel',
+          _countText(list),
           textAlign: TextAlign.center,
           style: _Type.count(context),
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          current,
+          _currentName(list),
           textAlign: TextAlign.center,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
@@ -118,42 +165,59 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
         ),
         Expanded(
           child: LayoutBuilder(
-            builder: (BuildContext context, BoxConstraints c) {
-              final double diameter = _diameter(context, c);
-              return Column(
-                children: <Widget>[
-                  const SizedBox(height: _wheelGap),
-                  SpinWheel(
-                    key: _wheel,
-                    names: names,
-                    diameter: diameter,
-                    onLanded: (int i) => _landed(list[i]),
-                    onCurrent: (int i) => setState(() => _current = i),
-                    onSpinning: (bool on) {
-                      if (on && !_spunOnce) setState(() => _spunOnce = true);
-                    },
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  AnimatedOpacity(
-                    opacity: _spunOnce ? 0 : 1,
-                    duration: AppMotion.long,
-                    child: Text(
-                      'Throw the wheel, or tap Spin',
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      textScaler: MediaQuery.textScalerOf(
-                        context,
-                      ).clamp(maxScaleFactor: _hintMaxScale),
-                      style: _Type.hint(context),
-                    ),
-                  ),
-                ],
-              );
-            },
+            builder: (BuildContext context, BoxConstraints c) => Column(
+              children: <Widget>[
+                const SizedBox(height: _wheelGap),
+                _wheelOf(list, _diameter(context, c)),
+                const SizedBox(height: AppSpacing.lg),
+                _hint(TextAlign.center),
+              ],
+            ),
           ),
         ),
       ],
+    );
+  }
+
+  /// On its side: the title, count, name and hint down the left, the wheel
+  /// on the right, as tall as the screen allows.
+  Widget _wideLive(Widget title, List<Place> list) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints c) {
+        final double diameter = _wideDiameter(c);
+        return Row(
+          // The text starts at the top, as it does upright.
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    title,
+                    const SizedBox(height: AppSpacing.md),
+                    Text(_countText(list), style: _Type.count(context)),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      _currentName(list),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: _Type.readout(context),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    _hint(TextAlign.start),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xxl),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: _wheelOf(list, diameter),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -174,6 +238,13 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
     );
   }
 }
+
+/// The wheel on its side: as tall as the screen allows, and at most a
+/// little over half its width, leaving the rest for the text.
+double _wideDiameter(BoxConstraints c) => math.max(
+  120,
+  math.min(420, math.min(c.maxHeight - SpinWheel.arrowRoom, c.maxWidth * 0.55)),
+);
 
 /// Space between the name above the wheel and the top of the arrow.
 const double _wheelGap = AppSpacing.lg;
@@ -238,7 +309,10 @@ abstract final class _Type {
 /// Nothing for the first 300 ms, since a quick answer needs no placeholder,
 /// then a skeleton of the count, the name and the wheel in their places.
 class _Loading extends StatefulWidget {
-  const _Loading();
+  const _Loading({required this.title, required this.wide});
+
+  final Widget title;
+  final bool wide;
 
   @override
   State<_Loading> createState() => _LoadingState();
@@ -265,32 +339,77 @@ class _LoadingState extends State<_Loading> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_show) return const SizedBox.expand();
-    return Semantics(
-      label: 'Finding places nearby',
-      child: Column(
+    if (!_show) {
+      return Align(alignment: Alignment.topLeft, child: widget.title);
+    }
+    return widget.wide ? _wide() : _tall();
+  }
+
+  Widget _tall() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: <Widget>[
+      widget.title,
+      const SizedBox(height: AppSpacing.md),
+      const Center(child: _Bone(width: 150, height: 14)),
+      const SizedBox(height: AppSpacing.sm),
+      const Center(child: _Bone(width: 210, height: 28)),
+      Expanded(
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints c) {
+            final double d = _diameter(context, c);
+            return Column(
+              children: <Widget>[
+                const SizedBox(height: _wheelGap + SpinWheel.arrowRoom),
+                _WheelBone(diameter: d),
+              ],
+            );
+          },
+        ),
+      ),
+    ],
+  );
+
+  Widget _wide() => LayoutBuilder(
+    builder: (BuildContext context, BoxConstraints c) {
+      final double d = _wideDiameter(c);
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          const _Bone(width: 150, height: 14),
-          const SizedBox(height: AppSpacing.sm),
-          const _Bone(width: 210, height: 28),
           Expanded(
-            child: LayoutBuilder(
-              builder: (BuildContext context, BoxConstraints c) {
-                final double d = _diameter(context, c);
-                return Column(
-                  children: <Widget>[
-                    const SizedBox(height: _wheelGap + SpinWheel.arrowRoom),
-                    _Bone(width: d, height: d, round: true),
-                    const SizedBox(height: AppSpacing.lg + 18),
-                  ],
-                );
-              },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                widget.title,
+                const SizedBox(height: AppSpacing.md),
+                const _Bone(width: 150, height: 14),
+                const SizedBox(height: AppSpacing.sm),
+                const _Bone(width: 210, height: 28),
+              ],
             ),
           ),
+          const SizedBox(width: AppSpacing.xxl),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: _WheelBone(diameter: d),
+          ),
         ],
-      ),
-    );
-  }
+      );
+    },
+  );
+}
+
+/// The wheel's placeholder, which also tells a screen reader why the
+/// screen is waiting.
+class _WheelBone extends StatelessWidget {
+  const _WheelBone({required this.diameter});
+
+  final double diameter;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: 'Finding places nearby',
+    child: _Bone(width: diameter, height: diameter, round: true),
+  );
 }
 
 class _Bone extends StatelessWidget {

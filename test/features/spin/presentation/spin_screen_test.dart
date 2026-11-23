@@ -64,8 +64,10 @@ void main() {
     PlaceFilters? filters,
     bool demo = true,
     TextScaler scaler = TextScaler.noScaling,
+    Size size = const Size(412, 915),
+    EdgeInsets padding = const EdgeInsets.only(top: 24, bottom: 48),
   }) async {
-    await tester.binding.setSurfaceSize(const Size(412, 915));
+    await tester.binding.setSurfaceSize(size);
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       ProviderScope(
@@ -81,9 +83,9 @@ void main() {
           theme: buildAppTheme(),
           home: MediaQuery(
             data: MediaQueryData(
-              size: const Size(412, 915),
+              size: size,
               textScaler: scaler,
-              padding: const EdgeInsets.only(top: 24, bottom: 48),
+              padding: padding,
             ),
             child: const Scaffold(body: SpinScreen()),
           ),
@@ -221,5 +223,58 @@ void main() {
       await tester.pump(const Duration(milliseconds: 16));
     }
     await tester.pumpAndSettle();
+  });
+
+  group('on its side', () {
+    const Size wide = Size(915, 412);
+    // Landscape with three-button navigation: the buttons move to the side.
+    const EdgeInsets bars = EdgeInsets.only(top: 24, right: 48);
+
+    testWidgets('the name sits beside the wheel, and both stay above the '
+        'floating bar', (WidgetTester tester) async {
+      await show(tester, size: wide, padding: bars);
+      await loaded(tester);
+      expect(tester.takeException(), isNull);
+      final Rect wheel = tester.getRect(find.byType(SpinWheel));
+      final Rect count = tester.getRect(find.text('14 places on the wheel'));
+      expect(count.right, lessThan(wheel.left));
+      // 412 minus the floating bar's 60 dp and its 12 dp gap.
+      expect(wheel.bottom, lessThanOrEqualTo(412 - 60 - 12));
+      expect(wheel.right, lessThanOrEqualTo(915 - 48));
+      expect(wheel.height, greaterThan(200));
+    });
+
+    testWidgets('large system text still fits', (WidgetTester tester) async {
+      await show(
+        tester,
+        size: wide,
+        padding: bars,
+        scaler: const _DampedScaler(),
+      );
+      await loaded(tester);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the skeleton puts the wheel where the wheel will be', (
+      WidgetTester tester,
+    ) async {
+      await show(
+        tester,
+        size: wide,
+        padding: bars,
+        repo: _Repo(delay: const Duration(seconds: 1)),
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+      final Rect bone = tester.getRect(
+        find.bySemanticsLabel('Finding places nearby'),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
+      final Rect wheel = tester.getRect(find.byType(SpinWheel));
+      // The wheel's disc starts under the arrow's room.
+      expect(bone.left, closeTo(wheel.left, 0.5));
+      expect(bone.bottom, closeTo(wheel.bottom, 0.5));
+      expect(bone.width, closeTo(wheel.width, 0.5));
+    });
   });
 }

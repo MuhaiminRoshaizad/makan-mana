@@ -192,3 +192,15 @@ of Makan Mana" that picks a place near you, and makanmana.app,
 wemakanmana.com and others use it for food pickers. Should the app ever go
 to the stores, Apple requires a unique name, so the store listing would need
 a different one.
+
+## 016: Portrait and landscape
+
+**Decided:** every screen works in both orientations. In landscape the Spin
+tab puts the place's name beside the wheel rather than above it.
+
+**Why:** a phone may be on its side in a stand or a car mount, and an app
+that only works one way round fails anyone who cannot turn it. Large system
+text has to fit in both.
+
+**Costs:** every screen is laid out and tested twice. In landscape a phone
+is only about 400 dp tall, so the wheel is smaller there.
