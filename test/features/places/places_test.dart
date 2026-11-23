@@ -120,6 +120,28 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     expect(sub.read().hasError, isTrue);
   });
+
+  test('the defaults count as three filters, and Any as none', () {
+    expect(const PlaceFilters().activeCount, 3);
+    expect(
+      const PlaceFilters(
+        minRating: null,
+        minReviews: 0,
+        openNow: false,
+      ).activeCount,
+      0,
+    );
+  });
+
+  test('filters equal by value, and copyWith can clear the rating', () {
+    expect(const PlaceFilters(), const PlaceFilters());
+    expect(
+      const PlaceFilters().copyWith(minRating: () => null).minRating,
+      isNull,
+    );
+    expect(const PlaceFilters().copyWith(minReviews: 200).minReviews, 200);
+    expect(const PlaceFilters().copyWith(minReviews: 200).minRating, 4.0);
+  });
 }
 
 class _Counting implements PlacesRepository {
