@@ -138,6 +138,11 @@ void main() {
     await loaded(tester);
     expect(find.text('Nothing nearby passes these filters'), findsOneWidget);
     expect(find.byType(SpinWheel), findsNothing);
+
+    // The way out is right there.
+    await tester.tap(find.text('Edit filters'));
+    await tester.pumpAndSettle();
+    expect(find.text('Minimum rating'), findsOneWidget);
   });
 
   testWidgets('a failed search offers Try again, which searches again', (

@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_tokens.dart';
 import '../../places/domain/place.dart';
+import '../../places/presentation/filters_button.dart';
+import '../../places/presentation/filters_sheet.dart';
 import '../../places/presentation/places_providers.dart';
 import 'result_sheet.dart';
 import 'spin_wheel.dart';
@@ -57,7 +59,21 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
     final double clearance = AppNavMetrics.clearance(
       MediaQuery.paddingOf(context).bottom,
     );
-    final Widget title = Text('Makan Mana', style: _Type.title(context));
+    // The title and Filters share a line while there is room; with large
+    // text Filters moves under the title instead of squeezing it.
+    final Widget title = SizedBox(
+      width: double.infinity,
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: AppSpacing.sm,
+        runSpacing: AppSpacing.sm,
+        children: <Widget>[
+          Text('Makan Mana', style: _Type.title(context)),
+          const FiltersButton(),
+        ],
+      ),
+    );
     return SafeArea(
       bottom: false,
       child: Padding(
@@ -88,11 +104,13 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
                 const SizedBox(height: AppSpacing.md),
                 Expanded(
                   child: switch (places) {
-                    AsyncData<List<Place>>() => const _Message(
+                    AsyncData<List<Place>>() => _Message(
                       title: 'Nothing nearby passes these filters',
                       body:
                           'Lower the rating or the number of reviews to bring '
                           'some places back.',
+                      action: 'Edit filters',
+                      onAction: () => showFiltersSheet(context),
                     ),
                     AsyncError<List<Place>>(:final Object error) => _failed(
                       error,
@@ -170,7 +188,9 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
                 const SizedBox(height: _wheelGap),
                 _wheelOf(list, _diameter(context, c)),
                 const SizedBox(height: AppSpacing.lg),
-                _hint(TextAlign.center),
+                // Takes only what is left, so rounding in the size budget
+                // can never push it past the bottom.
+                Flexible(child: _hint(TextAlign.center)),
               ],
             ),
           ),
