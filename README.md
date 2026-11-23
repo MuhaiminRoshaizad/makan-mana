@@ -34,7 +34,7 @@ ids; the screens are being built.
 
 ## Getting started
 
-Requires Flutter 3.44 or later. Runs on Android and iOS.
+Requires Flutter 3.44.6 (pinned in `pubspec.yaml`). Runs on Android and iOS.
 
 ```bash
 flutter pub get
@@ -44,6 +44,11 @@ flutter run
 Before committing:
 
 ```bash
+dart format lib test
 flutter analyze
 flutter test
 ```
+
+GitHub Actions runs the same checks and a debug Android build on every push
+to `main` and every pull request, and builds the iOS app on macOS
+(`.github/workflows/ci.yml`).
