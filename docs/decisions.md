@@ -179,3 +179,16 @@ a 5% critical value of 22.4).
 
 **Costs:** a spin takes about 4 to 6 seconds. The result depends on the
 throw, so tests drive the model with fixed inputs rather than gestures.
+
+## 015: Keep the name Makan Mana
+
+**Decided:** the app stays Makan Mana, with the ids `my.minned.makanmana`.
+
+**Why:** it is the question the app answers, in the words the office
+already uses. The app is made for one office, not for the stores.
+
+**Costs:** the name is taken many times over. Maybank's MAE app has a "Wheel
+of Makan Mana" that picks a place near you, and makanmana.app,
+wemakanmana.com and others use it for food pickers. Should the app ever go
+to the stores, Apple requires a unique name, so the store listing would need
+a different one.
