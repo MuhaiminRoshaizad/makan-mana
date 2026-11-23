@@ -1,22 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/theme/app_tokens.dart';
 import 'floating_nav.dart';
+import 'tab_root.dart';
 
 /// Hosts the two tabs with the floating bar over them. Pages and sheets
 /// open on the root navigator, above all of this, so the bar never covers
 /// them.
-class AppShell extends StatelessWidget {
+class AppShell extends ConsumerWidget {
   const AppShell({super.key, required this.shell});
 
   final StatefulNavigationShell shell;
 
-  void _select(int i) =>
-      shell.goBranch(i, initialLocation: i == shell.currentIndex);
+  void _select(WidgetRef ref, int i) {
+    // A tab change ends a "press back again" that was waiting.
+    ref.read(backToCloseProvider).disarm();
+    shell.goBranch(i, initialLocation: i == shell.currentIndex);
+  }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       // The keyboard covers the bar, as on iOS, instead of lifting it.
       resizeToAvoidBottomInset: false,
@@ -29,7 +34,10 @@ class AppShell extends StatelessWidget {
             bottom:
                 MediaQuery.paddingOf(context).bottom + AppNavMetrics.bottomGap,
             child: Center(
-              child: FloatingNav(index: shell.currentIndex, onSelect: _select),
+              child: FloatingNav(
+                index: shell.currentIndex,
+                onSelect: (int i) => _select(ref, i),
+              ),
             ),
           ),
         ],

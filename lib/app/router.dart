@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../features/map/presentation/map_screen.dart';
 import '../features/spin/presentation/spin_screen.dart';
 import 'shell.dart';
+import 'tab_root.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>(
   debugLabel: 'root',
@@ -31,12 +32,18 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((Ref ref) {
         branches: <StatefulShellBranch>[
           StatefulShellBranch(
             routes: <RouteBase>[
-              GoRoute(path: '/spin', builder: (_, _) => const SpinScreen()),
+              GoRoute(
+                path: '/spin',
+                builder: (_, _) => const TabRoot(child: SpinScreen()),
+              ),
             ],
           ),
           StatefulShellBranch(
             routes: <RouteBase>[
-              GoRoute(path: '/map', builder: (_, _) => const MapScreen()),
+              GoRoute(
+                path: '/map',
+                builder: (_, _) => const TabRoot(child: MapScreen()),
+              ),
             ],
           ),
         ],
