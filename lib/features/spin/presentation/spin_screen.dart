@@ -92,8 +92,8 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
             builder: (BuildContext context, BoxConstraints c) {
               final double diameter = _diameter(context, c);
               return Column(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
+                  const SizedBox(height: _wheelGap),
                   SpinWheel(
                     names: names,
                     diameter: diameter,
@@ -144,6 +144,9 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
   }
 }
 
+/// Space between the name above the wheel and the top of the arrow.
+const double _wheelGap = AppSpacing.lg;
+
 /// The hint keeps to two lines and grows with system text only so far.
 const double _hintMaxScale = 1.6;
 const double _hintSize = 14;
@@ -163,7 +166,10 @@ double _diameter(BuildContext context, BoxConstraints c) {
     120,
     math.min(
       420,
-      math.min(c.maxWidth, c.maxHeight - SpinWheel.arrowRoom - hintRoom),
+      math.min(
+        c.maxWidth,
+        c.maxHeight - _wheelGap - SpinWheel.arrowRoom - hintRoom,
+      ),
     ),
   );
 }
@@ -241,9 +247,8 @@ class _LoadingState extends State<_Loading> {
               builder: (BuildContext context, BoxConstraints c) {
                 final double d = _diameter(context, c);
                 return Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   children: <Widget>[
-                    SizedBox(height: SpinWheel.arrowRoom),
+                    const SizedBox(height: _wheelGap + SpinWheel.arrowRoom),
                     _Bone(width: d, height: d, round: true),
                     const SizedBox(height: AppSpacing.lg + 18),
                   ],
