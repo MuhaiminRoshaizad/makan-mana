@@ -15,23 +15,23 @@ class PlacesUnavailable implements Exception {
   const PlacesUnavailable();
 }
 
-final Provider<PlacesRepository> placesRepositoryProvider =
-    Provider<PlacesRepository>((Ref ref) {
-      if (demoMode) return const DemoPlacesRepository();
-      throw const PlacesUnavailable();
-    });
-
-/// Where to search. The demo build searches 2 km round Dataran Merdeka.
-final Provider<SearchArea> searchAreaProvider = Provider<SearchArea>((Ref ref) {
-  if (demoMode) {
-    return const SearchArea(
-      latitude: 3.1478,
-      longitude: 101.6953,
-      radiusMetres: 2000,
+/// Null while the app has no source of places outside the demo build.
+final Provider<PlacesRepository?> placesRepositoryProvider =
+    Provider<PlacesRepository?>(
+      (Ref ref) => demoMode ? const DemoPlacesRepository() : null,
     );
-  }
-  throw const PlacesUnavailable();
-});
+
+/// Where to search: null until location is built, except in the demo build,
+/// which searches 2 km round Dataran Merdeka.
+final Provider<SearchArea?> searchAreaProvider = Provider<SearchArea?>(
+  (Ref ref) => demoMode
+      ? const SearchArea(
+          latitude: 3.1478,
+          longitude: 101.6953,
+          radiusMetres: 2000,
+        )
+      : null,
+);
 
 final NotifierProvider<FiltersNotifier, PlaceFilters> filtersProvider =
     NotifierProvider<FiltersNotifier, PlaceFilters>(FiltersNotifier.new);
@@ -43,12 +43,16 @@ class FiltersNotifier extends Notifier<PlaceFilters> {
   void set(PlaceFilters filters) => state = filters;
 }
 
-/// Every place found in the search area, before filtering.
+/// Every place found in the search area, before filtering. A failed search
+/// is shown at once with Try again, instead of Riverpod's automatic retries
+/// keeping the skeleton up for minutes.
 final FutureProvider<List<Place>> nearbyPlacesProvider =
     FutureProvider<List<Place>>((Ref ref) {
-      final PlacesRepository repo = ref.watch(placesRepositoryProvider);
-      return repo.nearby(ref.watch(searchAreaProvider));
-    });
+      final PlacesRepository? repo = ref.watch(placesRepositoryProvider);
+      final SearchArea? area = ref.watch(searchAreaProvider);
+      if (repo == null || area == null) throw const PlacesUnavailable();
+      return repo.nearby(area);
+    }, retry: (_, _) => null);
 
 /// The places on the wheel: the nearby ones that pass the filters. Changing
 /// a filter refilters what was found without searching again.
