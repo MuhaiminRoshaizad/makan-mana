@@ -52,3 +52,10 @@ flutter test
 GitHub Actions runs the same checks and a debug Android build on every push
 to `main` and every pull request, and builds the iOS app on macOS
 (`.github/workflows/ci.yml`).
+
+## Credits
+
+The idea came from [MARUTSU](https://github.com/Ikmal1270), who suggested
+putting the places to eat on a wheel and spinning it to decide where to have
+lunch. Designed and built by
+[Muhaimin Roshaizad](https://github.com/MuhaiminRoshaizad).
