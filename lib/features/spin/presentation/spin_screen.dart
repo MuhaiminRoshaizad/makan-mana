@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../places/domain/place.dart';
 import '../../places/presentation/places_providers.dart';
+import 'result_sheet.dart';
 import 'spin_wheel.dart';
 
 /// The Spin tab: how many places made it onto the wheel, the one under the
@@ -21,6 +22,34 @@ class SpinScreen extends ConsumerStatefulWidget {
 class _SpinScreenState extends ConsumerState<SpinScreen> {
   int? _current;
   bool _spunOnce = false;
+  final GlobalKey<SpinWheelState> _wheel = GlobalKey<SpinWheelState>();
+
+  /// The result waits while the winning wedge flashes.
+  Timer? _result;
+
+  @override
+  void dispose() {
+    _result?.cancel();
+    super.dispose();
+  }
+
+  void _landed(Place place) {
+    _result?.cancel();
+    final Duration flash = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 650);
+    _result = Timer(flash, () {
+      if (!mounted) return;
+      showResultSheet(
+        context,
+        place: place,
+        onSpinAgain: () {
+          Navigator.of(context, rootNavigator: true).pop();
+          _wheel.currentState?.spin();
+        },
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -95,8 +124,10 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
                 children: <Widget>[
                   const SizedBox(height: _wheelGap),
                   SpinWheel(
+                    key: _wheel,
                     names: names,
                     diameter: diameter,
+                    onLanded: (int i) => _landed(list[i]),
                     onCurrent: (int i) => setState(() => _current = i),
                     onSpinning: (bool on) {
                       if (on && !_spunOnce) setState(() => _spunOnce = true);

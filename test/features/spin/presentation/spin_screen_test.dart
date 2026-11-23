@@ -193,4 +193,33 @@ void main() {
     }
     unawaited(Future<void>.value());
   });
+
+  testWidgets('when the wheel lands, the result names the same place, and '
+      'Spin again closes it and spins', (WidgetTester tester) async {
+    await show(tester);
+    await loaded(tester);
+    final SpinWheel wheel = tester.widget<SpinWheel>(find.byType(SpinWheel));
+    await tester.tap(find.bySemanticsLabel('Spin'));
+    for (int i = 0; i < 12 * 60; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      if (find.text('Today you are eating at').evaluate().isNotEmpty) break;
+    }
+    await tester.pumpAndSettle();
+    expect(find.text('Today you are eating at'), findsOneWidget);
+    // The name above the wheel and the result agree.
+    final String shown = wheel.names.firstWhere(
+      (String n) => find.text(n).evaluate().length == 2,
+    );
+    expect(find.text(shown), findsNWidgets(2));
+
+    await tester.tap(find.text('Spin again'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Today you are eating at'), findsNothing);
+    expect(find.bySemanticsLabel('Spinning'), findsOneWidget);
+    for (int i = 0; i < 12 * 60; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await tester.pumpAndSettle();
+  });
 }
