@@ -1,4 +1,4 @@
-package com.example.makan_mana
+package my.minned.makanmana
 
 import io.flutter.embedding.android.FlutterActivity
 
