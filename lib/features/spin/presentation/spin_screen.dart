@@ -9,6 +9,7 @@ import '../../../core/theme/app_tokens.dart';
 import '../../location/domain/location_repository.dart';
 import '../../location/presentation/location_providers.dart';
 import '../../places/domain/place.dart';
+import '../../places/presentation/area_button.dart';
 import '../../places/presentation/filters_button.dart';
 import '../../places/presentation/filters_sheet.dart';
 import '../../places/presentation/places_providers.dart';
@@ -79,20 +80,22 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
     final double clearance = AppNavMetrics.clearance(
       MediaQuery.paddingOf(context).bottom,
     );
-    // The title and Filters share a line while there is room; with large
-    // text Filters moves under the title instead of squeezing it.
-    final Widget title = SizedBox(
-      width: double.infinity,
-      child: Wrap(
-        alignment: WrapAlignment.spaceBetween,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: AppSpacing.sm,
-        runSpacing: AppSpacing.sm,
-        children: <Widget>[
-          Text('Makan Mana', style: _Type.title(context)),
-          const FiltersButton(),
-        ],
-      ),
+    // The search area and Filters share the line under the title while
+    // there is room; with large text Filters moves under the area instead
+    // of squeezing it.
+    final Widget title = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text('Makan Mana', style: _Type.title(context)),
+        const SizedBox(height: AppSpacing.xs),
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: const <Widget>[AreaButton(), FiltersButton()],
+        ),
+      ],
     );
     return SafeArea(
       bottom: false,
