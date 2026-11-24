@@ -1,3 +1,6 @@
+import 'opening_hours.dart';
+import 'review.dart';
+
 /// A place to eat near the search centre.
 class Place {
   const Place({
@@ -8,6 +11,8 @@ class Place {
     required this.distanceMetres,
     required this.openNow,
     this.category,
+    this.hours,
+    this.reviews = const <Review>[],
   });
 
   /// Google's place ID.
@@ -26,4 +31,10 @@ class Place {
 
   /// What kind of place it is, such as "Malay Restaurant", when known.
   final String? category;
+
+  /// Its usual week, when known.
+  final OpeningHours? hours;
+
+  /// A few reviews, most relevant first.
+  final List<Review> reviews;
 }

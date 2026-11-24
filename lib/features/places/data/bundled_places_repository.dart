@@ -2,8 +2,10 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart' show rootBundle;
 
+import '../domain/opening_hours.dart';
 import '../domain/place.dart';
 import '../domain/places_repository.dart';
+import '../domain/review.dart';
 
 /// Raised when a build carries no usable list of places.
 class NoBundledPlaces implements Exception {
@@ -12,23 +14,31 @@ class NoBundledPlaces implements Exception {
 
 /// Places from the list bundled into the app when it is built: a file
 /// prepared on the developer's machine and kept out of the repository
-/// (docs/decisions.md 017). It has ratings and review counts but no opening
-/// hours.
+/// (docs/decisions.md 017). Places visited for details carry their weekly
+/// hours and a few reviews; the rest have neither yet.
 class BundledPlacesRepository implements PlacesRepository {
-  BundledPlacesRepository({Future<String> Function()? load})
-    : _load = load ?? (() => rootBundle.loadString(asset));
+  BundledPlacesRepository({
+    Future<String> Function()? load,
+    DateTime Function()? now,
+  }) : _load = load ?? (() => rootBundle.loadString(asset)),
+       _now = now ?? DateTime.now;
 
   static const String asset = 'assets/places/places.private.json';
 
   final Future<String> Function() _load;
+
+  /// The phone's own clock: the list's hours are local Malaysian time, as
+  /// is a phone used here.
+  final DateTime Function() _now;
   List<_Entry>? _entries;
 
   @override
-  bool get knowsOpeningHours => false;
+  bool get knowsOpeningHours => true;
 
   @override
   Future<List<Place>> nearby(SearchArea area) async {
     final List<_Entry> all = _entries ??= await _read();
+    final DateTime now = _now();
     final List<Place> near = <Place>[];
     for (final _Entry e in all) {
       final int metres = distanceMetres(
@@ -45,8 +55,10 @@ class BundledPlacesRepository implements PlacesRepository {
           rating: e.rating,
           reviewCount: e.reviews,
           distanceMetres: metres,
-          openNow: null,
+          openNow: e.hours?.isOpenAt(now),
           category: e.category,
+          hours: e.hours,
+          reviews: e.topReviews,
         ),
       );
     }
@@ -77,11 +89,56 @@ class BundledPlacesRepository implements PlacesRepository {
               category: raw['category'] as String?,
               lat: (raw['lat'] as num).toDouble(),
               lon: (raw['lon'] as num).toDouble(),
+              hours: _hours(raw['hours']),
+              topReviews: _reviews(raw['topReviews']),
             ),
       ];
     } on Object catch (_) {
       throw const NoBundledPlaces();
     }
+  }
+
+  static const List<String> _days = <String>[
+    'mon',
+    'tue',
+    'wed',
+    'thu',
+    'fri',
+    'sat',
+    'sun',
+  ];
+
+  /// {"mon": [[660, 1290]], ...} in minutes from midnight, or null.
+  static OpeningHours? _hours(Object? raw) {
+    if (raw is! Map<String, dynamic>) return null;
+    return OpeningHours(<List<(int, int)>>[
+      for (final String day in _days)
+        <(int, int)>[
+          for (final Object? span
+              in (raw[day] as List<dynamic>? ?? <dynamic>[]))
+            (
+              (span! as List<dynamic>)[0] as int,
+              (span as List<dynamic>)[1] as int,
+            ),
+        ],
+    ]);
+  }
+
+  /// [{"rating": 5, "month": "2026-08", "text": "..."}], or none.
+  static List<Review> _reviews(Object? raw) {
+    if (raw is! List<dynamic>) return const <Review>[];
+    return <Review>[
+      for (final Object? r in raw)
+        if (r is Map<String, dynamic>)
+          Review(
+            rating: (r['rating'] as num).toInt(),
+            text: r['text'] as String,
+            month: switch (r['month']) {
+              final String m => DateTime.tryParse('$m-01'),
+              _ => null,
+            },
+          ),
+    ];
   }
 }
 
@@ -94,6 +151,8 @@ class _Entry {
     required this.category,
     required this.lat,
     required this.lon,
+    required this.hours,
+    required this.topReviews,
   });
 
   final String id;
@@ -103,4 +162,6 @@ class _Entry {
   final String? category;
   final double lat;
   final double lon;
+  final OpeningHours? hours;
+  final List<Review> topReviews;
 }

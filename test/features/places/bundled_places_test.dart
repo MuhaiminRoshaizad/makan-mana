@@ -76,7 +76,47 @@ void main() {
     );
   });
 
-  test('the list says nothing about opening hours, so Open now starts off', () {
+  test('a place with hours is open or closed by the phone\'s clock, one '
+      'without stays unknown, and Open now starts on', () async {
+    const List<List<int>> lunch = <List<int>>[
+      <int>[660, 1290],
+    ];
+    final Map<String, Object?> withHours = <String, Object?>{
+      ...entry('kafe'),
+      'hours': <String, Object?>{
+        'mon': <Object>[],
+        for (final String d in <String>[
+          'tue',
+          'wed',
+          'thu',
+          'fri',
+          'sat',
+          'sun',
+        ])
+          d: lunch,
+      },
+      'topReviews': <Object>[
+        <String, Object?>{'rating': 5, 'month': '2026-08', 'text': 'Sedap.'},
+      ],
+    };
+    Future<List<Place>> at(DateTime now) => BundledPlacesRepository(
+      load: () async =>
+          file(<Map<String, Object?>>[withHours, entry('new', lon: 100.401)]),
+      now: () => now,
+    ).nearby(area);
+
+    // Tuesday 24/11/2026 at noon: open. Monday 23/11/2026 at noon: closed.
+    final List<Place> tuesday = await at(DateTime(2026, 11, 24, 12));
+    expect(tuesday.firstWhere((Place p) => p.id == 'kafe').openNow, isTrue);
+    expect(tuesday.firstWhere((Place p) => p.id == 'new').openNow, isNull);
+    final List<Place> monday = await at(DateTime(2026, 11, 23, 12));
+    expect(monday.firstWhere((Place p) => p.id == 'kafe').openNow, isFalse);
+
+    final Place kafe = tuesday.firstWhere((Place p) => p.id == 'kafe');
+    expect(kafe.reviews.single.rating, 5);
+    expect(kafe.reviews.single.text, 'Sedap.');
+    expect(kafe.reviews.single.month, DateTime(2026, 8));
+
     final ProviderContainer c = ProviderContainer(
       overrides: [
         placesRepositoryProvider.overrideWithValue(
@@ -87,8 +127,7 @@ void main() {
       ],
     );
     addTearDown(c.dispose);
-    expect(c.read(filtersProvider).openNow, isFalse);
-    expect(c.read(filtersProvider).minRating, 4.0);
+    expect(c.read(filtersProvider).openNow, isTrue);
   });
 
   test(

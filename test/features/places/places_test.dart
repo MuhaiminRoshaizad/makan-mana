@@ -41,9 +41,13 @@ void main() {
       expect(f.passes(place(open: false)), isFalse);
     });
 
-    test('drop one nobody has rated, or whose hours are unknown', () {
+    test('drop one nobody has rated', () {
       expect(f.passes(place(rating: null)), isFalse);
-      expect(f.passes(place(open: null)), isFalse);
+    });
+
+    test('keep one whose hours are not known yet, rather than empty the '
+        'wheel while the list is filled in', () {
+      expect(f.passes(place(open: null)), isTrue);
     });
   });
 

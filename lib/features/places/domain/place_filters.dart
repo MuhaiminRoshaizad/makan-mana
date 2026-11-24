@@ -47,8 +47,9 @@ class PlaceFilters {
     final double? min = minRating;
     if (min != null && (p.rating ?? 0) < min) return false;
     if (p.reviewCount < minReviews) return false;
-    // A place whose hours Google does not know cannot be shown to be open.
-    if (openNow && p.openNow != true) return false;
+    // Only places known to be closed go; a place whose hours are not known
+    // stays, so a list still being filled in does not empty the wheel.
+    if (openNow && p.openNow == false) return false;
     return true;
   }
 }

@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:makan_mana/core/theme/app_theme.dart';
-import 'package:makan_mana/features/places/data/bundled_places_repository.dart';
 import 'package:makan_mana/features/places/data/demo_places_repository.dart';
 import 'package:makan_mana/features/places/domain/place.dart';
 import 'package:makan_mana/features/places/domain/places_repository.dart';
@@ -185,9 +184,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          placesRepositoryProvider.overrideWithValue(
-            BundledPlacesRepository(load: () async => '{"places": {}}'),
-          ),
+          placesRepositoryProvider.overrideWithValue(_NoHours()),
           searchAreaProvider.overrideWithValue(
             const SearchArea(latitude: 0, longitude: 0, radiusMetres: 2000),
           ),
@@ -207,4 +204,13 @@ void main() {
     expect(find.text('Open now'), findsNothing);
     expect(find.byType(CupertinoSwitch), findsNothing);
   });
+}
+
+/// A source whose places never say when they are open.
+class _NoHours implements PlacesRepository {
+  @override
+  bool get knowsOpeningHours => false;
+
+  @override
+  Future<List<Place>> nearby(SearchArea area) async => const <Place>[];
 }
