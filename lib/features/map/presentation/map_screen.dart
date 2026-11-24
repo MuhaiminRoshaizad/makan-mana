@@ -8,7 +8,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/format/formatters.dart';
 import '../../../core/theme/app_tokens.dart';
-import '../../../core/widgets/size_reporter.dart';
 import '../../../core/widgets/status_message.dart';
 import '../../location/domain/location_repository.dart';
 import '../../location/presentation/location_message.dart';
@@ -22,7 +21,7 @@ import '../../places/presentation/maps_link.dart';
 import '../../places/presentation/places_providers.dart';
 import 'places_map.dart';
 
-/// The Map tab: the places on the wheel, round the search centre.
+/// The Map tab: the places on the wheel, round you or a pin you drop.
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key, this.random});
 
@@ -43,22 +42,32 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   /// Whether the card shows a spin's winner rather than a tapped pin.
   bool _won = false;
+  bool _tilted = true;
+  int _recentre = 0;
   LatLon? _focus;
   int _focusTick = 0;
+  LatLon? _ringAt;
+  int _ringTick = 0;
 
-  /// The height of the card or panel at the foot of the map, which the
-  /// map's attribution must stay above to remain visible.
-  double _panel = 0;
+  /// Location is asked for once, the first time the map opens without it.
+  bool _asked = false;
 
-  void _panelSize(Size size) {
-    if (mounted && size.height != _panel) setState(() => _panel = size.height);
+  /// Shown once on entering Pin mode: how to move the pin.
+  bool _hint = false;
+  Timer? _hintTimer;
+
+  @override
+  void dispose() {
+    _hintTimer?.cancel();
+    super.dispose();
   }
 
   /// How long each hop of a spin lasts, slowing down, with a last pause
   /// before the winner.
   static const List<int> _hopMs = <int>[90, 110, 140, 190, 260, 620];
 
-  /// Picks a place by hopping across a few pins, then flies to the winner.
+  /// Hops across a few pins with the camera still, lands with a ring, flies
+  /// in on the winner, and only then shows its card.
   Future<void> _spin(List<Place> list) async {
     if (_spinning || list.isEmpty) return;
     final bool still = MediaQuery.disableAnimationsOf(context);
@@ -84,59 +93,98 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       }
     }
     final Place winner = pick(last);
+    final LatLon at = (latitude: winner.latitude, longitude: winner.longitude);
     unawaited(HapticFeedback.mediumImpact());
+    setState(() {
+      _hop = winner.id;
+      _ringAt = at;
+      _ringTick++;
+    });
+    if (!still) await Future<void>.delayed(const Duration(milliseconds: 640));
+    if (!mounted) return;
+    setState(() {
+      _focus = at;
+      _focusTick++;
+    });
+    if (!still) await Future<void>.delayed(const Duration(milliseconds: 1150));
+    if (!mounted) return;
     setState(() {
       _hop = null;
       _spinning = false;
       _selected = winner.id;
       _won = true;
-      _focus = (latitude: winner.latitude, longitude: winner.longitude);
-      _focusTick++;
     });
   }
 
   void _select(String? id) {
     if (_spinning) return;
     setState(() {
+      // Putting a winner's card away flies the camera back out.
+      if (id == null && _won) _recentre++;
       _selected = id;
       _won = false;
     });
   }
 
-  bool _tilted = true;
-  int _recentre = 0;
-
-  /// Where the middle of the map last came to rest, if it has moved.
-  LatLon? _target;
-
-  void _moved(double latitude, double longitude) =>
-      setState(() => _target = (latitude: latitude, longitude: longitude));
-
-  /// Searches round the middle of the map, or round [fallback] when the map
-  /// has not moved yet.
-  void _searchHere(LatLon fallback) {
-    final LatLon at = _target ?? fallback;
+  /// Drops a pin at [at] to search round it, and says how to move it.
+  void _dropPin(LatLon at) {
     ref.read(pinProvider.notifier).drop(at.latitude, at.longitude);
+    _hintTimer?.cancel();
     setState(() {
-      _target = null;
       _selected = null;
+      _hint = true;
     });
+    _hintTimer = Timer(const Duration(milliseconds: 3200), () {
+      if (mounted) setState(() => _hint = false);
+    });
+  }
+
+  /// Back to searching round the phone, asking for location if need be.
+  void _useYou() {
+    final LocationState? here = ref.read(locationProvider).value;
+    setState(() {
+      _selected = null;
+      _hint = false;
+    });
+    // The demo searches round its own spot, with no location to wait for.
+    if (here is Located || demoMode) {
+      ref.read(pinProvider.notifier).clear();
+    } else {
+      // The pin stays until location comes through.
+      ref.read(locationProvider.notifier).ask();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final AsyncValue<SearchArea> area = ref.watch(searchAreaProvider);
     final AsyncValue<List<Place>> places = ref.watch(wheelPlacesProvider);
-    final List<Place> list = places.value ?? const <Place>[];
+    final bool chosen = ref.watch(filtersChosenProvider);
+    final PlaceFilters filters = ref.watch(filtersProvider);
+    final LatLon? pin = ref.watch(pinProvider);
+    final LocationState? location = ref.watch(locationProvider).value;
+    final List<Place> list = chosen
+        ? places.value ?? const <Place>[]
+        : const <Place>[];
     final Place? selected = list
         .where((Place p) => p.id == _selected)
         .firstOrNull;
     final EdgeInsets safe = MediaQuery.paddingOf(context);
     final double clearance = AppNavMetrics.clearance(safe.bottom);
     final SearchArea? here = area.value;
-    final PlaceFilters filters = ref.watch(filtersProvider);
-    // Without a location, the person can still choose a spot on the map,
-    // starting from the middle of the places (docs/decisions.md 003).
+
+    // Once location comes through, a pin dropped while waiting for it goes.
+    ref.listen(locationProvider, (
+      AsyncValue<LocationState>? was,
+      AsyncValue<LocationState> now,
+    ) {
+      if (was?.value is! Located && now.value is Located && pin != null) {
+        ref.read(pinProvider.notifier).clear();
+      }
+    });
+
+    // Without a location, ask once; refused, search round a pin dropped in
+    // the middle of the places (docs/decisions.md 003).
     final LocationState? needs = switch (area.error) {
       final Object e => switch (rootCause(e)) {
         NeedsLocation(:final state) => state,
@@ -147,45 +195,52 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final LatLon? start = needs == null
         ? null
         : ref.watch(mapStartProvider).value;
-    final bool choosing = needs != null && start != null;
-    final Widget? message = choosing ? null : _message(area, places);
-    final bool showMap = here != null || choosing;
-    final double latitude = here?.latitude ?? start?.latitude ?? 0;
-    final double longitude = here?.longitude ?? start?.longitude ?? 0;
-    // Search this area is offered once the middle of the map leaves the
-    // ring. A flight to a spin's winner stays inside it, so never does.
-    final bool strayed =
-        here != null &&
-        _target != null &&
-        distanceMetres(
-              here.latitude,
-              here.longitude,
-              _target!.latitude,
-              _target!.longitude,
-            ) >
-            filters.maxDistanceMetres;
+    if (needs != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (needs is CanAsk && !_asked) {
+          _asked = true;
+          ref.read(locationProvider.notifier).ask();
+        } else if (start != null && ref.read(pinProvider) == null) {
+          _dropPin(start);
+        }
+      });
+    }
+
+    final Widget? message = here == null && start == null
+        ? _message(area, places)
+        : null;
+    final bool pinMode = pin != null;
     return ColoredBox(
       color: AppColors.background,
       child: Stack(
         children: <Widget>[
-          if (showMap)
+          if (here != null)
             Positioned.fill(
               child: ref.watch(mapViewProvider)(
                 MapProps(
-                  latitude: latitude,
-                  longitude: longitude,
-                  radiusMetres: here == null ? null : filters.maxDistanceMetres,
-                  places: here == null ? const <Place>[] : list,
+                  latitude: here.latitude,
+                  longitude: here.longitude,
+                  radiusMetres: filters.maxDistanceMetres,
+                  places: list,
                   selectedId: _hop ?? selected?.id,
                   tilted: _tilted,
                   recentre: _recentre,
-                  bottomInset:
-                      clearance + (_panel > 0 ? _panel + AppSpacing.sm : 0),
+                  you: location is Located
+                      ? (
+                          latitude: location.latitude,
+                          longitude: location.longitude,
+                        )
+                      : null,
+                  dropPin: pin,
                   onPinTap: _select,
                   onMapTap: () => _select(null),
-                  onMoved: _moved,
+                  onPinDropped: (double lat, double lon) =>
+                      ref.read(pinProvider.notifier).drop(lat, lon),
                   focus: _focus,
                   focusTick: _focusTick,
+                  ringAt: _ringAt,
+                  ringTick: _ringTick,
                 ),
               ),
             ),
@@ -201,35 +256,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 child: message,
               ),
             )
-          else if (choosing) ...<Widget>[
-            // The spot to search round is under the tip of this pin.
-            const Positioned.fill(
-              child: IgnorePointer(
-                child: Center(
-                  child: Padding(
-                    padding: EdgeInsets.only(bottom: 40),
-                    child: Icon(
-                      CupertinoIcons.location_solid,
-                      size: 40,
-                      color: AppColors.ink,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: AppSpacing.lg,
-              right: AppSpacing.lg,
-              bottom: clearance,
-              child: SizeReporter(
-                onSize: _panelSize,
-                child: _ChooseSpot(
-                  state: needs,
-                  onSearch: () => _searchHere(start),
-                ),
-              ),
-            ),
-          ] else ...<Widget>[
+          else ...<Widget>[
             Positioned(
               top: safe.top + AppSpacing.lg,
               left: AppSpacing.lg,
@@ -238,29 +265,17 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        _CountPill(text: _count(places, here)),
-                        const SizedBox(height: AppSpacing.md),
-                        _Appear(
-                          visible: strayed,
-                          child: _SearchHerePill(
-                            onTap: () => _searchHere((
-                              latitude: latitude,
-                              longitude: longitude,
-                            )),
-                          ),
-                        ),
-                      ],
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: FiltersButton(
+                        label: _count(places, filters, chosen),
+                      ),
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: <Widget>[
-                      const FiltersButton(),
-                      const SizedBox(height: AppSpacing.md),
                       _RoundButton(
                         label: '3D view',
                         toggled: _tilted,
@@ -274,13 +289,16 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                         ),
                       ),
                       const SizedBox(height: AppSpacing.md),
-                      _RoundButton(
-                        label: 'Back to the search area',
-                        onTap: () => setState(() {
-                          _recentre++;
-                          _target = null;
-                        }),
-                        child: const Icon(CupertinoIcons.scope, size: 22),
+                      _ModePill(
+                        pin: pinMode,
+                        onYou: _useYou,
+                        onPin: () => _dropPin(
+                          pin ??
+                              (
+                                latitude: here?.latitude ?? 0,
+                                longitude: here?.longitude ?? 0,
+                              ),
+                        ),
                       ),
                     ],
                   ),
@@ -288,44 +306,32 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               ),
             ),
             Positioned(
+              top: safe.top + AppSpacing.lg + 48 + AppSpacing.md,
+              left: AppSpacing.lg,
+              right: 100,
+              child: _Hint(
+                visible: _hint && pinMode,
+                text: 'Drag the pin to where you want to eat',
+              ),
+            ),
+            Positioned(
               left: AppSpacing.lg,
               right: AppSpacing.lg,
               bottom: clearance,
-              child: SizeReporter(
-                onSize: _panelSize,
-                child: AnimatedSwitcher(
-                  duration: MediaQuery.disableAnimationsOf(context)
-                      ? Duration.zero
-                      : AppMotion.medium,
-                  switchInCurve: AppMotion.enter,
-                  switchOutCurve: AppMotion.exit,
-                  transitionBuilder: (Widget child, Animation<double> a) =>
-                      FadeTransition(
-                        opacity: a,
-                        child: SlideTransition(
-                          position: Tween<Offset>(
-                            begin: const Offset(0, 0.15),
-                            end: Offset.zero,
-                          ).animate(a),
-                          child: child,
-                        ),
+              child: _HandOver(
+                child: selected != null
+                    ? _PinCard(
+                        key: ValueKey<String>('card ${selected.id} $_won'),
+                        place: selected,
+                        won: _won,
+                        onClose: () => _select(null),
+                      )
+                    : list.isEmpty || here == null
+                    ? null
+                    : _SpinButton(
+                        key: const ValueKey<String>('spin'),
+                        onPressed: _spinning ? null : () => _spin(list),
                       ),
-                  child: selected != null
-                      ? _PinCard(
-                          key: ValueKey<String>(selected.id),
-                          place: selected,
-                          won: _won,
-                          onClose: () => _select(null),
-                        )
-                      : list.isEmpty || here == null
-                      ? const SizedBox.shrink()
-                      : Center(
-                          key: const ValueKey<String>('spin'),
-                          child: _SpinButton(
-                            onPressed: _spinning ? null : () => _spin(list),
-                          ),
-                        ),
-                ),
               ),
             ),
           ],
@@ -334,13 +340,17 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     );
   }
 
-  String _count(AsyncValue<List<Place>> places, SearchArea? here) {
-    final String within = here == null
-        ? ''
-        : ' within ${formatDistance(ref.read(filtersProvider).maxDistanceMetres)}';
+  String _count(
+    AsyncValue<List<Place>> places,
+    PlaceFilters filters,
+    bool chosen,
+  ) {
+    if (!chosen) return "Choose what you're after";
+    final String within =
+        ' within ${formatDistance(filters.maxDistanceMetres)}';
     return switch (places) {
       AsyncData<List<Place>>(value: final List<Place> l) when l.isEmpty =>
-        'No places pass these filters',
+        'No places$within',
       AsyncData<List<Place>>(value: final List<Place> l) =>
         '${l.length} ${l.length == 1 ? 'place' : 'places'}$within',
       _ => 'Finding places',
@@ -372,38 +382,258 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 }
 
-class _CountPill extends StatelessWidget {
-  const _CountPill({required this.text});
-  final String text;
+/// You or Pin: search round the phone, or round a pin you drag. One pill
+/// with a word under each icon, so it reads as either-or.
+class _ModePill extends StatelessWidget {
+  const _ModePill({
+    required this.pin,
+    required this.onYou,
+    required this.onPin,
+  });
+
+  final bool pin;
+  final VoidCallback onYou;
+  final VoidCallback onPin;
 
   @override
   Widget build(BuildContext context) {
+    final Duration d = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 280);
     return Semantics(
-      liveRegion: true,
+      container: true,
+      label: 'Search round',
       child: Container(
-        constraints: const BoxConstraints(minHeight: 40),
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg,
-          vertical: AppSpacing.sm,
-        ),
+        width: 56,
+        padding: const EdgeInsets.all(4),
         decoration: const ShapeDecoration(
           color: AppColors.surface,
           shape: StadiumBorder(),
           shadows: _floatShadow,
         ),
-        child: AnimatedSwitcher(
-          duration: AppMotion.short,
-          child: Text(
-            text,
-            key: ValueKey<String>(text),
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: AppColors.ink,
+        child: Stack(
+          children: <Widget>[
+            AnimatedPositioned(
+              duration: d,
+              curve: const Cubic(0.3, 1.3, 0.5, 1),
+              left: 0,
+              right: 0,
+              top: pin ? 62 : 0,
+              height: 62,
+              child: const DecoratedBox(
+                decoration: ShapeDecoration(
+                  color: AppColors.ink,
+                  shape: StadiumBorder(),
+                ),
+              ),
+            ),
+            Column(
+              children: <Widget>[
+                _ModeButton(
+                  label: 'You',
+                  on: !pin,
+                  onTap: onYou,
+                  icon: CupertinoIcons.location_fill,
+                ),
+                _ModeButton(
+                  label: 'Pin',
+                  on: pin,
+                  onTap: onPin,
+                  icon: CupertinoIcons.map_pin,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ModeButton extends StatelessWidget {
+  const _ModeButton({
+    required this.label,
+    required this.on,
+    required this.onTap,
+    required this.icon,
+  });
+
+  final String label;
+  final bool on;
+  final VoidCallback onTap;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color c = on ? AppColors.surface : AppColors.muted;
+    return Semantics(
+      button: true,
+      inMutuallyExclusiveGroup: true,
+      checked: on,
+      label: label,
+      excludeSemantics: true,
+      child: Material(
+        type: MaterialType.transparency,
+        shape: const StadiumBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            width: 48,
+            height: 62,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Icon(icon, size: 20, color: c),
+                const SizedBox(height: 3),
+                AnimatedDefaultTextStyle(
+                  duration: AppMotion.short,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: c,
+                  ),
+                  child: Text(label, textScaler: TextScaler.noScaling),
+                ),
+              ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A one-line hint that drops in, then leaves by itself.
+class _Hint extends StatelessWidget {
+  const _Hint({required this.visible, required this.text});
+
+  final bool visible;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final Duration d = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : AppMotion.medium;
+    return IgnorePointer(
+      child: Semantics(
+        liveRegion: visible,
+        child: AnimatedSlide(
+          offset: visible ? Offset.zero : const Offset(0, -0.3),
+          duration: d,
+          curve: AppMotion.enter,
+          child: AnimatedOpacity(
+            opacity: visible ? 1 : 0,
+            duration: d,
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: AppColors.ink,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: AppSpacing.sm,
+                  ),
+                  child: Text(
+                    text,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.surface,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Shows one thing at the foot of the map, and hands over to the next only
+/// after the first has gone: the card slides away, then Spin pops in, so
+/// the two never cross.
+class _HandOver extends StatefulWidget {
+  const _HandOver({required this.child});
+
+  final Widget? child;
+
+  @override
+  State<_HandOver> createState() => _HandOverState();
+}
+
+class _HandOverState extends State<_HandOver>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _a;
+  late Widget? _shown = widget.child;
+
+  @override
+  void initState() {
+    super.initState();
+    _a = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+      reverseDuration: const Duration(milliseconds: 200),
+      value: widget.child == null ? 0 : 1,
+    );
+  }
+
+  @override
+  void didUpdateWidget(_HandOver old) {
+    super.didUpdateWidget(old);
+    final Widget? next = widget.child;
+    if (next?.key == _shown?.key) {
+      _shown = next;
+      return;
+    }
+    if (MediaQuery.disableAnimationsOf(context)) {
+      setState(() => _shown = next);
+      _a.value = next == null ? 0 : 1;
+      return;
+    }
+    // Out first, then in.
+    _a.reverse().then((_) {
+      if (!mounted) return;
+      setState(() => _shown = widget.child);
+      if (widget.child != null) _a.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _a.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget? shown = _shown;
+    if (shown == null) return const SizedBox.shrink();
+    final bool card = shown is _PinCard;
+    return AnimatedBuilder(
+      animation: _a,
+      builder: (BuildContext context, Widget? child) {
+        final double t = _a.status == AnimationStatus.reverse
+            ? Curves.easeIn.transform(_a.value)
+            : (card ? AppMotion.enter : const Cubic(0.3, 1.4, 0.5, 1))
+                  .transform(_a.value);
+        return Opacity(
+          opacity: _a.value.clamp(0, 1),
+          child: card
+              ? Transform.translate(
+                  offset: Offset(0, 40 * (1 - t)),
+                  child: child,
+                )
+              : Transform.scale(scale: 0.8 + 0.2 * t, child: child),
+        );
+      },
+      child: Center(child: shown),
     );
   }
 }
@@ -592,134 +822,9 @@ const List<BoxShadow> _floatShadow = <BoxShadow>[
   BoxShadow(color: Color(0x2926241F), blurRadius: 8, offset: Offset(0, 2)),
 ];
 
-/// Choosing a spot on the map while location is not shared, with the way
-/// to share it beside.
-class _ChooseSpot extends ConsumerWidget {
-  const _ChooseSpot({required this.state, required this.onSearch});
-
-  final LocationState state;
-  final VoidCallback onSearch;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final LocationNotifier location = ref.read(locationProvider.notifier);
-    final (String other, VoidCallback onOther) = switch (state) {
-      RefusedForGood() => ('Open Settings', location.ask),
-      LocationOff() => ('Turn on location', location.ask),
-      PositionUnavailable() => ('Try my location again', location.recheck),
-      _ => ('Use my location', location.ask),
-    };
-    return Semantics(
-      container: true,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: _floatShadow,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              Semantics(
-                header: true,
-                child: const Text(
-                  'Choose where to eat',
-                  style: TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.ink,
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              const Text(
-                'Move the map until the pin is where you want to eat, then '
-                'search there.',
-                style: TextStyle(
-                  fontSize: 15,
-                  height: 1.4,
-                  color: AppColors.muted,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              FilledButton(
-                onPressed: onSearch,
-                child: const Text('Search here'),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              TextButton(onPressed: onOther, child: Text(other)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Offered once the map has moved away from the search area.
-class _SearchHerePill extends StatelessWidget {
-  const _SearchHerePill({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const ShapeDecoration(
-        shape: StadiumBorder(),
-        shadows: _floatShadow,
-      ),
-      child: FilledButton.tonal(
-        onPressed: onTap,
-        style: FilledButton.styleFrom(
-          backgroundColor: AppColors.surface,
-          foregroundColor: AppColors.ink,
-          minimumSize: const Size(48, 44),
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-        ),
-        child: const Text('Search this area'),
-      ),
-    );
-  }
-}
-
-/// Fades and drops [child] in when [visible], and back out when not.
-class _Appear extends StatelessWidget {
-  const _Appear({required this.visible, required this.child});
-  final bool visible;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final Duration d = MediaQuery.disableAnimationsOf(context)
-        ? Duration.zero
-        : AppMotion.medium;
-    return IgnorePointer(
-      ignoring: !visible,
-      child: ExcludeSemantics(
-        excluding: !visible,
-        child: AnimatedSlide(
-          offset: visible ? Offset.zero : const Offset(0, -0.3),
-          duration: d,
-          curve: AppMotion.enter,
-          child: AnimatedOpacity(
-            opacity: visible ? 1 : 0,
-            duration: d,
-            curve: AppMotion.enter,
-            child: child,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// Spins from the map: hops across the pins and lands on one.
 class _SpinButton extends StatelessWidget {
-  const _SpinButton({required this.onPressed});
+  const _SpinButton({super.key, required this.onPressed});
   final VoidCallback? onPressed;
 
   @override

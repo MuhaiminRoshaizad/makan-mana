@@ -245,8 +245,12 @@ web.
 and offers no SLA (openfreemap.org, checked 24/11/2026); if it stops, the
 style URL changes to another vector tile host.
 3D buildings appear only from zoom 14, closer than a 2 km circle fits. The
-Android build needs JDK 21, and iOS needs 15.5 or later. The map's own
-attribution button must stay visible (OpenStreetMap's licence).
+Android build needs JDK 21, and iOS needs 15.5 or later.
+
+**Changed (24/11/2026):** the map shows no OpenStreetMap credit. ODbL 4.3
+asks for one only when the map is used publicly, that is by anyone other
+than its owner, and the app is for its owner alone. If anyone else ever
+uses it, the credit comes back.
 
 ## 019: The wheel starts empty, and filters are kept
 
