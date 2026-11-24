@@ -269,3 +269,26 @@ asking once, not every lunch.
 **Costs:** a first lunch takes one more step. Holding every place within
 15 km is cheap for the bundled list; a live source such as Google Places,
 which returns 20 at a time, would need its own way to count matches.
+
+## 020: The icon is a slot machine of food, and the opening rolls its reels
+
+**Decided:** the app icon is three reels on the app's ink, in a white frame,
+stopped on a bowl, a burger and a cup in the wheel's colours, with a pointer
+above and two gold sparks. Opening the app, the reels roll and stop one after
+another, the sparks flash, and the whole screen rolls on like the next reel
+while the app rolls up from below. Picked by the user from four concepts
+drawn from their own references (demo: claude.ai/artifact/Kkx4aApjiX93VYb4qPivj9).
+
+**How:** the drawing lives once, in `lib/app/opening/reels_art.dart`. A test
+writes Android's adaptive and themed icons, the system splash and every PNG
+icon from it (`--dart-define=UPDATE_ICONS=true`), and otherwise fails if a
+committed vector file drifts from it. Android 12 and later show the reels,
+still rolling, on their own splash; before that the launch background shows
+the same. Flutter's first frame draws exactly that frame, so the reels carry
+on without a jump. iPhone shows a plain ink launch screen, as Apple asks, and
+the reels fade in. Reduce Motion shows them stopped and fades the opening.
+
+**Costs:** about 1.8 s from the first frame to the app, on every cold start.
+The splash never settles into the Spin tab, by the user's wish. Not yet seen
+on a phone: the hand-over from the system splash to Flutter's first frame is
+checked only in tests and a web build.

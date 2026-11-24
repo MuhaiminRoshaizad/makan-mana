@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app/app.dart';
+import 'app/system_style.dart';
 import 'features/places/data/prefs_filters_store.dart';
 import 'features/places/presentation/places_providers.dart';
 
@@ -11,16 +12,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Draw behind the status and navigation bars; screens handle the insets.
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark,
-      statusBarBrightness: Brightness.light,
-      systemNavigationBarColor: Colors.transparent,
-      systemNavigationBarIconBrightness: Brightness.dark,
-      systemNavigationBarContrastEnforced: false,
-    ),
-  );
+  SystemChrome.setSystemUIOverlayStyle(appSystemStyle);
   final SharedPreferencesWithCache prefs =
       await SharedPreferencesWithCache.create(
         cacheOptions: PrefsFiltersStore.options,
@@ -30,7 +22,7 @@ Future<void> main() async {
       overrides: [
         filtersStoreProvider.overrideWithValue(PrefsFiltersStore(prefs)),
       ],
-      child: const MakanManaApp(),
+      child: const MakanManaApp(opening: true),
     ),
   );
 }
