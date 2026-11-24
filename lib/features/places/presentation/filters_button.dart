@@ -15,7 +15,10 @@ class FiltersButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final int active = ref.watch(filtersProvider).activeCount;
+    // Nothing is in use until the filters are first chosen.
+    final int active = ref.watch(filtersChosenProvider)
+        ? ref.watch(filtersProvider).activeCount
+        : 0;
     return Semantics(
       button: true,
       label: <String>[

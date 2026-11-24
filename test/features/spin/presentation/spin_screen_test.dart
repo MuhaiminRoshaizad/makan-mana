@@ -412,6 +412,11 @@ void main() {
       await loaded(tester);
       expect(find.text('What are you after today?'), findsOneWidget);
       expect(find.byType(SpinWheel), findsNothing);
+      // No filters count as in use until they are chosen.
+      expect(
+        find.bySemanticsLabel('Filters, Within 2 km of you'),
+        findsOneWidget,
+      );
       await tester.tap(find.text('Choose'));
       await tester.pumpAndSettle();
       await tester.drag(find.text('Minimum rating'), const Offset(0, -2000));
