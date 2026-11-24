@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:makan_mana/core/theme/app_theme.dart';
+import 'package:makan_mana/features/places/data/bundled_places_repository.dart';
 import 'package:makan_mana/features/places/data/demo_places_repository.dart';
 import 'package:makan_mana/features/places/domain/place.dart';
 import 'package:makan_mana/features/places/domain/places_repository.dart';
@@ -177,5 +178,33 @@ void main() {
       tester.getRect(find.text('Show 14 places')).bottom,
       lessThanOrEqualTo(915 - 48),
     );
+  });
+
+  testWidgets('with a places list that has no opening hours, Open now is not '
+      'offered', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          placesRepositoryProvider.overrideWithValue(
+            BundledPlacesRepository(load: () async => '{"places": {}}'),
+          ),
+          searchAreaProvider.overrideWithValue(
+            const SearchArea(latitude: 0, longitude: 0, radiusMetres: 2000),
+          ),
+        ],
+        child: MaterialApp(
+          theme: buildAppTheme(),
+          home: const Scaffold(body: Center(child: FiltersButton())),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 50));
+    // Rating and reviews only: two filters in use.
+    expect(find.bySemanticsLabel('Filters, 2 in use'), findsOneWidget);
+    await tester.tap(find.byType(FiltersButton));
+    await tester.pumpAndSettle();
+    expect(find.text('Minimum rating'), findsOneWidget);
+    expect(find.text('Open now'), findsNothing);
+    expect(find.byType(CupertinoSwitch), findsNothing);
   });
 }

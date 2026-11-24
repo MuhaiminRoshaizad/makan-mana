@@ -46,6 +46,8 @@ class _FiltersSheetState extends ConsumerState<FiltersSheet> {
   Widget build(BuildContext context) {
     final List<Place>? nearby = ref.watch(nearbyPlacesProvider).value;
     final int? matching = nearby?.where(_draft.passes).length;
+    final FiltersNotifier filters = ref.read(filtersProvider.notifier);
+    final bool hours = ref.watch(placesRepositoryProvider).knowsOpeningHours;
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.xl,
@@ -74,9 +76,9 @@ class _FiltersSheetState extends ConsumerState<FiltersSheet> {
                 ),
               ),
               TextButton(
-                onPressed: _draft == const PlaceFilters()
+                onPressed: _draft == filters.defaults
                     ? null
-                    : () => _set(const PlaceFilters()),
+                    : () => _set(filters.defaults),
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.muted,
                   minimumSize: const Size(48, 48),
@@ -108,49 +110,52 @@ class _FiltersSheetState extends ConsumerState<FiltersSheet> {
                 _set(_draft.copyWith(minReviews: reviewSteps[i].$2)),
           ),
           const SizedBox(height: AppSpacing.xxl),
-          // A Material, so the row's press highlight paints on the card.
-          Material(
-            color: AppColors.background,
-            clipBehavior: Clip.antiAlias,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppRadii.card),
-            ),
-            child: MergeSemantics(
-              child: ListTile(
-                minTileHeight: 56,
-                title: const Text(
-                  'Open now',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.ink,
+          // Offered only where the places say when they are open.
+          if (hours) ...<Widget>[
+            // A Material, so the row's press highlight paints on the card.
+            Material(
+              color: AppColors.background,
+              clipBehavior: Clip.antiAlias,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadii.card),
+              ),
+              child: MergeSemantics(
+                child: ListTile(
+                  minTileHeight: 56,
+                  title: const Text(
+                    'Open now',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.ink,
+                    ),
                   ),
+                  trailing: CupertinoSwitch(
+                    value: _draft.openNow,
+                    activeTrackColor: AppColors.ink,
+                    onChanged: (bool on) => _set(_draft.copyWith(openNow: on)),
+                  ),
+                  onTap: () => _set(_draft.copyWith(openNow: !_draft.openNow)),
                 ),
-                trailing: CupertinoSwitch(
-                  value: _draft.openNow,
-                  activeTrackColor: AppColors.ink,
-                  onChanged: (bool on) => _set(_draft.copyWith(openNow: on)),
-                ),
-                onTap: () => _set(_draft.copyWith(openNow: !_draft.openNow)),
               ),
             ),
-          ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(
-              AppSpacing.xs,
-              AppSpacing.sm,
-              AppSpacing.xs,
-              0,
-            ),
-            child: Text(
-              'Opening hours come from Google Maps and can be out of date.',
-              style: TextStyle(
-                fontSize: 13,
-                height: 1.45,
-                color: AppColors.muted,
+            const Padding(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.xs,
+                AppSpacing.sm,
+                AppSpacing.xs,
+                0,
+              ),
+              child: Text(
+                'Opening hours come from Google Maps and can be out of date.',
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.45,
+                  color: AppColors.muted,
+                ),
               ),
             ),
-          ),
+          ],
           const SizedBox(height: AppSpacing.xl),
           if (matching == 0) ...<Widget>[
             const Text(
