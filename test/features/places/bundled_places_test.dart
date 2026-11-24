@@ -55,6 +55,18 @@ void main() {
     expect(got.first.openNow, isNull);
   });
 
+  test('a map with no location starts at the middle of the list', () async {
+    final BundledPlacesRepository repo = BundledPlacesRepository(
+      load: () async => file(<Map<String, Object?>>[
+        entry('a', lat: 5.4, lon: 100.3),
+        entry('b', lat: 5.6, lon: 100.5),
+      ]),
+    );
+    final LatLon? middle = await repo.middle();
+    expect(middle!.latitude, closeTo(5.5, 1e-9));
+    expect(middle.longitude, closeTo(100.4, 1e-9));
+  });
+
   test('a place marked temporarily closed stays off', () async {
     final List<Place> got = await BundledPlacesRepository(
       load: () async =>

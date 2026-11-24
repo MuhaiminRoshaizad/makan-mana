@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/status_message.dart';
@@ -267,7 +268,12 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
 
   Widget _failed(Object raw) {
     final Object error = rootCause(raw);
-    if (error is NeedsLocation) return LocationMessage(error.state);
+    if (error is NeedsLocation) {
+      return LocationMessage(
+        error.state,
+        onChooseSpot: () => context.go('/map'),
+      );
+    }
     if (error is PlacesUnavailable) {
       return const StatusMessage(
         title: 'No places in this build',

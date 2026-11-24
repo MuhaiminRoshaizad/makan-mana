@@ -247,5 +247,8 @@ class _NoHours implements PlacesRepository {
   bool get knowsOpeningHours => false;
 
   @override
+  Future<LatLon?> middle() async => null;
+
+  @override
   Future<List<Place>> nearby(SearchArea area) async => const <Place>[];
 }

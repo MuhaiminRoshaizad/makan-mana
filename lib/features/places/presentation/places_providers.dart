@@ -82,11 +82,39 @@ class RadiusNotifier extends Notifier<int> {
   void set(int metres) => state = metres;
 }
 
-/// Where to search: round the phone's location, or in the demo round
-/// Dataran Merdeka.
+/// A spot the person chose on the map instead of their location
+/// (docs/decisions.md 003); null while searching round the phone.
+final NotifierProvider<PinNotifier, LatLon?> pinProvider =
+    NotifierProvider<PinNotifier, LatLon?>(PinNotifier.new);
+
+class PinNotifier extends Notifier<LatLon?> {
+  @override
+  LatLon? build() => null;
+
+  void drop(double latitude, double longitude) =>
+      state = (latitude: latitude, longitude: longitude);
+
+  void clear() => state = null;
+}
+
+/// Where a map with no location to go on starts: the middle of the places.
+final FutureProvider<LatLon?> mapStartProvider = FutureProvider<LatLon?>(
+  (Ref ref) => ref.watch(placesRepositoryProvider).middle(),
+);
+
+/// Where to search: round a dropped pin, else round the phone's location,
+/// or in the demo round Dataran Merdeka.
 final FutureProvider<SearchArea> searchAreaProvider =
     FutureProvider<SearchArea>((Ref ref) async {
       final int radius = ref.watch(radiusProvider);
+      final LatLon? pin = ref.watch(pinProvider);
+      if (pin != null) {
+        return SearchArea(
+          latitude: pin.latitude,
+          longitude: pin.longitude,
+          radiusMetres: radius,
+        );
+      }
       if (demoMode) {
         return SearchArea(
           latitude: 3.1478,

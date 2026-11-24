@@ -35,17 +35,31 @@ class _DampedScaler extends TextScaler {
 
 /// A phone that has not shared its location.
 class _NotShared implements LocationRepository {
+  int asks = 0;
+
   @override
   Future<LocationState> current() async => const CanAsk();
 
   @override
-  Future<LocationState> ask() async => const CanAsk();
+  Future<LocationState> ask() async {
+    asks++;
+    return const CanAsk();
+  }
 
   @override
   Future<void> openAppSettings() async {}
 
   @override
   Future<void> openLocationSettings() async {}
+}
+
+/// The demo's places, from a source that covers everywhere, so has no
+/// middle for a map to start from.
+class _Everywhere extends DemoPlacesRepository {
+  const _Everywhere() : super(delay: Duration.zero);
+
+  @override
+  Future<LatLon?> middle() async => null;
 }
 
 void main() {
@@ -65,9 +79,12 @@ void main() {
         .setMockMethodCallHandler(SystemChannels.platform, null),
   );
 
+  late _NotShared phone;
+
   Future<void> show(
     WidgetTester tester, {
     bool located = true,
+    PlacesRepository places = const DemoPlacesRepository(delay: Duration.zero),
     TextScaler scaler = TextScaler.noScaling,
   }) async {
     await tester.binding.setSurfaceSize(const Size(412, 915));
@@ -79,13 +96,21 @@ void main() {
     addTearDown(tester.view.resetViewPadding);
     container = ProviderContainer(
       overrides: [
-        placesRepositoryProvider.overrideWithValue(
-          const DemoPlacesRepository(delay: Duration.zero),
-        ),
+        placesRepositoryProvider.overrideWithValue(places),
+        // Not the demo build, so without a pin the area comes from the
+        // phone's location.
+        locationRepositoryProvider.overrideWithValue(phone = _NotShared()),
         if (located)
-          searchAreaProvider.overrideWith((_) async => area)
-        else
-          locationRepositoryProvider.overrideWithValue(_NotShared()),
+          searchAreaProvider.overrideWith((Ref ref) async {
+            final LatLon? pin = ref.watch(pinProvider);
+            return pin == null
+                ? area
+                : SearchArea(
+                    latitude: pin.latitude,
+                    longitude: pin.longitude,
+                    radiusMetres: 2000,
+                  );
+          }),
         mapViewProvider.overrideWithValue((MapProps props) {
           shown = props;
           return const ColoredBox(color: Color(0xFFE9E7E1));
@@ -165,6 +190,20 @@ void main() {
     expect(find.text('No places pass these filters'), findsOneWidget);
   });
 
+  testWidgets('the map buttons keep to the right edge', (
+    WidgetTester tester,
+  ) async {
+    // Small text leaves room in the top row, as the real font does; the
+    // test font's wide letters would fill it and hide a drift.
+    await show(tester, scaler: const TextScaler.linear(0.5));
+    for (final String label in <String>['3D view', 'Back to the search area']) {
+      expect(
+        tester.getRect(find.bySemanticsLabel(label)).right,
+        closeTo(412 - 16, 0.5),
+      );
+    }
+  });
+
   testWidgets('3D is a toggle that starts on; recentre asks the map to go '
       'back to the search area', (WidgetTester tester) async {
     await show(tester);
@@ -186,12 +225,69 @@ void main() {
     expect(shown!.recentre, before + 1);
   });
 
-  testWidgets('without a location there is no map, only the way to share '
-      'it', (WidgetTester tester) async {
+  testWidgets('without a location the map starts at the middle of the '
+      'places to choose a spot; Search here searches round it', (
+    WidgetTester tester,
+  ) async {
     await show(tester, located: false);
+    expect(find.text('Choose where to eat'), findsOneWidget);
+    // No area yet: no ring, no places.
+    expect(shown!.radiusMetres, isNull);
+    expect(shown!.places, isEmpty);
+    expect(shown!.latitude, 3.1478);
+    shown!.onMoved(3.15, 101.70);
+    await tester.pump();
+    await tester.tap(find.text('Search here'));
+    for (int i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+    expect(container.read(pinProvider), (latitude: 3.15, longitude: 101.70));
+    expect(find.text('Choose where to eat'), findsNothing);
+    expect(shown!.latitude, 3.15);
+    expect(shown!.radiusMetres, 2000);
+    expect(shown!.places, isNotEmpty);
+  });
+
+  testWidgets('while choosing a spot, Use my location asks for it', (
+    WidgetTester tester,
+  ) async {
+    await show(tester, located: false);
+    await tester.tap(find.text('Use my location'));
+    await tester.pump();
+    expect(phone.asks, 1);
+  });
+
+  testWidgets('a source that covers everywhere has nowhere to start a map, '
+      'so it asks for the location', (WidgetTester tester) async {
+    await show(tester, located: false, places: const _Everywhere());
     expect(find.text('Find places near you'), findsOneWidget);
-    expect(find.text('Use my location'), findsOneWidget);
     expect(shown, isNull);
+  });
+
+  testWidgets('moving the map well away offers Search this area, which '
+      'searches round the new middle', (WidgetTester tester) async {
+    await show(tester);
+    Finder pill() => find.ancestor(
+      of: find.text('Search this area'),
+      matching: find.byType(IgnorePointer),
+    );
+    bool offered() => !tester.widget<IgnorePointer>(pill().first).ignoring;
+    expect(offered(), isFalse);
+    // 100 m is still the same area.
+    shown!.onMoved(area.latitude + 0.0009, area.longitude);
+    await tester.pumpAndSettle();
+    expect(offered(), isFalse);
+    shown!.onMoved(area.latitude + 0.02, area.longitude);
+    await tester.pumpAndSettle();
+    expect(offered(), isTrue);
+    await tester.tap(find.text('Search this area'));
+    for (int i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+    expect(container.read(pinProvider)!.latitude, area.latitude + 0.02);
+    expect(shown!.latitude, area.latitude + 0.02);
+    await tester.pumpAndSettle();
+    expect(offered(), isFalse);
   });
 
   testWidgets('with large system text the card fits and its button stays '

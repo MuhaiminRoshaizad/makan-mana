@@ -143,6 +143,19 @@ void main() {
     expect(find.text('Within 2 km of you'), findsOneWidget);
   });
 
+  testWidgets('after a pin is dropped the row says so, and the sheet can '
+      'go back to searching round the phone', (WidgetTester tester) async {
+    await show(tester);
+    container.read(pinProvider.notifier).drop(3.15, 101.7);
+    await tester.pump();
+    expect(find.text('Within 2 km of your pin'), findsOneWidget);
+    await open(tester);
+    await tester.tap(find.text('Search round me instead'));
+    await tester.pumpAndSettle();
+    expect(container.read(pinProvider), isNull);
+    expect(find.text('Within 2 km of you'), findsOneWidget);
+  });
+
   testWidgets('with large system text the sheet fits and Search stays above '
       'the navigation bar', (WidgetTester tester) async {
     await show(tester, scaler: const _DampedScaler());

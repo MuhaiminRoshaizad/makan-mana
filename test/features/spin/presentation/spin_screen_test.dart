@@ -27,6 +27,9 @@ class _Repo implements PlacesRepository {
   @override
   bool get knowsOpeningHours => true;
 
+  @override
+  Future<LatLon?> middle() async => null;
+
   _Repo({this.delay = Duration.zero, this.fail = false});
   final Duration delay;
   bool fail;
@@ -70,6 +73,9 @@ class _Location implements LocationRepository {
 class _NoFile implements PlacesRepository {
   @override
   bool get knowsOpeningHours => true;
+
+  @override
+  Future<LatLon?> middle() async => null;
 
   @override
   Future<List<Place>> nearby(SearchArea a) => throw const NoBundledPlaces();
@@ -221,6 +227,7 @@ void main() {
       await loaded(tester);
       expect(phone.asks, 0);
       expect(find.text('Find places near you'), findsOneWidget);
+      expect(find.text('Choose a spot on the map'), findsOneWidget);
       await tester.tap(find.text('Use my location'));
       await loaded(tester);
       expect(phone.asks, 1);

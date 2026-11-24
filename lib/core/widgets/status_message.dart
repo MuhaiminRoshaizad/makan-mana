@@ -11,12 +11,18 @@ class StatusMessage extends StatelessWidget {
     required this.body,
     this.action,
     this.onAction,
+    this.otherAction,
+    this.onOtherAction,
   });
 
   final String title;
   final String body;
   final String? action;
   final VoidCallback? onAction;
+
+  /// A quieter second choice under the first.
+  final String? otherAction;
+  final VoidCallback? onOtherAction;
 
   @override
   Widget build(BuildContext context) {
@@ -48,6 +54,10 @@ class StatusMessage extends StatelessWidget {
             if (action != null) ...<Widget>[
               const SizedBox(height: AppSpacing.xxl),
               FilledButton(onPressed: onAction, child: Text(action!)),
+            ],
+            if (otherAction != null) ...<Widget>[
+              const SizedBox(height: AppSpacing.sm),
+              TextButton(onPressed: onOtherAction, child: Text(otherAction!)),
             ],
           ],
         ),

@@ -179,6 +179,9 @@ class _Counting implements PlacesRepository {
   @override
   bool get knowsOpeningHours => true;
 
+  @override
+  Future<LatLon?> middle() async => null;
+
   _Counting(this.onSearch);
   final void Function() onSearch;
 

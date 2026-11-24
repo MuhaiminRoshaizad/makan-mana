@@ -23,12 +23,15 @@ class MapProps {
     required this.bottomInset,
     required this.onPinTap,
     required this.onMapTap,
+    required this.onMoved,
   });
 
-  /// The search centre.
+  /// The search centre, or while choosing a spot, where the map starts.
   final double latitude;
   final double longitude;
-  final int radiusMetres;
+
+  /// Null while choosing a spot: there is no area to draw yet.
+  final int? radiusMetres;
 
   /// The places on the wheel, in wheel order, so each pin takes its wedge's
   /// colour.
@@ -47,6 +50,9 @@ class MapProps {
 
   final ValueChanged<String> onPinTap;
   final VoidCallback onMapTap;
+
+  /// Where the middle of the map came to rest after a move.
+  final void Function(double latitude, double longitude) onMoved;
 }
 
 typedef MapViewBuilder = Widget Function(MapProps props);
@@ -115,11 +121,17 @@ class _PlacesMapState extends State<PlacesMap> {
     }
   }
 
+  /// Choosing a spot starts at the zoom a 2 km area would have.
   CameraPosition _home() => CameraPosition(
     target: LatLng(_p.latitude, _p.longitude),
-    zoom: zoomToFit(_p.radiusMetres.toDouble(), _p.latitude, _width),
+    zoom: zoomToFit((_p.radiusMetres ?? 2000).toDouble(), _p.latitude, _width),
     tilt: _p.tilted ? mapTilt : 0,
   );
+
+  void _idle() {
+    final LatLng? at = _map?.cameraPosition?.target;
+    if (at != null) _p.onMoved(at.latitude, at.longitude);
+  }
 
   Future<void> _styleLoaded() async {
     final MapLibreMapController map = _map!;
@@ -210,30 +222,32 @@ class _PlacesMapState extends State<PlacesMap> {
   Map<String, dynamic> _areaJson() => <String, dynamic>{
     'type': 'FeatureCollection',
     'features': <Map<String, dynamic>>[
-      <String, dynamic>{
-        'type': 'Feature',
-        'properties': <String, dynamic>{},
-        'geometry': <String, dynamic>{
-          'type': 'Polygon',
-          'coordinates': <List<List<double>>>[
-            circleRing(_p.latitude, _p.longitude, _p.radiusMetres.toDouble()),
-          ],
+      if (_p.radiusMetres case final int radius)
+        <String, dynamic>{
+          'type': 'Feature',
+          'properties': <String, dynamic>{},
+          'geometry': <String, dynamic>{
+            'type': 'Polygon',
+            'coordinates': <List<List<double>>>[
+              circleRing(_p.latitude, _p.longitude, radius.toDouble()),
+            ],
+          },
         },
-      },
     ],
   };
 
   Map<String, dynamic> _youJson() => <String, dynamic>{
     'type': 'FeatureCollection',
     'features': <Map<String, dynamic>>[
-      <String, dynamic>{
-        'type': 'Feature',
-        'properties': <String, dynamic>{},
-        'geometry': <String, dynamic>{
-          'type': 'Point',
-          'coordinates': <double>[_p.longitude, _p.latitude],
+      if (_p.radiusMetres != null)
+        <String, dynamic>{
+          'type': 'Feature',
+          'properties': <String, dynamic>{},
+          'geometry': <String, dynamic>{
+            'type': 'Point',
+            'coordinates': <double>[_p.longitude, _p.latitude],
+          },
         },
-      },
     ],
   };
 
@@ -279,6 +293,8 @@ class _PlacesMapState extends State<PlacesMap> {
           },
           onStyleLoadedCallback: _styleLoaded,
           onMapClick: (_, _) => _p.onMapTap(),
+          trackCameraPosition: true,
+          onCameraIdle: _idle,
           compassEnabled: false,
           attributionButtonPosition: AttributionButtonPosition.bottomLeft,
           attributionButtonMargins: Point<double>(

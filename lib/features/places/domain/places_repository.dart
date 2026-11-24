@@ -27,7 +27,14 @@ abstract interface class PlacesRepository {
   /// Whether its places say if they are open now. The Open now filter is
   /// offered only when they do.
   bool get knowsOpeningHours;
+
+  /// The middle of the area this source covers, where a map with no
+  /// location to go on starts; null for a source that covers everywhere.
+  Future<LatLon?> middle();
 }
+
+/// A point on the Earth.
+typedef LatLon = ({double latitude, double longitude});
 
 /// Straight-line distance in metres between two points on the Earth, by the
 /// haversine formula.

@@ -197,6 +197,18 @@ class _SearchAreaSheetState extends ConsumerState<SearchAreaSheet> {
             onPressed: _search,
             child: const Text('Search this area'),
           ),
+          if (ref.watch(pinProvider) != null) ...<Widget>[
+            const SizedBox(height: AppSpacing.sm),
+            TextButton(
+              onPressed: () {
+                ref.read(pinProvider.notifier).clear();
+                _search();
+              },
+              child: Text(
+                demoMode ? 'Back to the demo area' : 'Search round me instead',
+              ),
+            ),
+          ],
         ],
       ),
     );

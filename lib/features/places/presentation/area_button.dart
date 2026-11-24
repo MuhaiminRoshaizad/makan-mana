@@ -15,7 +15,9 @@ class AreaButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final String radius = formatDistance(ref.watch(radiusProvider));
     // The demo searches round Dataran Merdeka, not round the phone.
-    final String label = demoMode
+    final String label = ref.watch(pinProvider) != null
+        ? 'Within $radius of your pin'
+        : demoMode
         ? 'Within $radius of Dataran Merdeka'
         : 'Within $radius of you';
     return Semantics(

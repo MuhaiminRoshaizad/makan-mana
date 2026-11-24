@@ -36,6 +36,20 @@ class BundledPlacesRepository implements PlacesRepository {
   @override
   bool get knowsOpeningHours => true;
 
+  /// The average position of every place in the list.
+  @override
+  Future<LatLon?> middle() async {
+    final List<_Entry> all = _entries ??= await _read();
+    if (all.isEmpty) return null;
+    double lat = 0;
+    double lon = 0;
+    for (final _Entry e in all) {
+      lat += e.lat;
+      lon += e.lon;
+    }
+    return (latitude: lat / all.length, longitude: lon / all.length);
+  }
+
   @override
   Future<List<Place>> nearby(SearchArea area) async {
     final List<_Entry> all = _entries ??= await _read();

@@ -15,6 +15,10 @@ class DemoPlacesRepository implements PlacesRepository {
   @override
   bool get knowsOpeningHours => true;
 
+  /// Dataran Merdeka, where the demo's places are.
+  @override
+  Future<LatLon?> middle() async => (latitude: 3.1478, longitude: 101.6953);
+
   @override
   Future<List<Place>> nearby(SearchArea area) async {
     await Future<void>.delayed(delay);
