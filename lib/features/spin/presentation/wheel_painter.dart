@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_tokens.dart';
-import 'wheel_colors.dart';
+import '../../../core/theme/wedge_colors.dart';
 
 /// Draws the wedges, their labels, the rim and a peg between every two
 /// wedges, unrotated: wedge i spans clockwise from the top.

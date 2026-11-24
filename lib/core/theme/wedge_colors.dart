@@ -1,6 +1,6 @@
 import 'dart:ui' show Color;
 
-import '../../../core/theme/app_tokens.dart';
+import 'app_tokens.dart';
 
 /// One wedge's fill and the label colour that reads on it.
 class WedgeColor {

@@ -1,33 +1,15 @@
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/format/formatters.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_sheet.dart';
-import '../../../core/widgets/toast.dart';
 import '../../places/domain/place.dart';
 import '../../places/domain/review.dart';
 import '../../places/presentation/hours_text.dart';
+import '../../places/presentation/maps_link.dart';
 import '../../places/presentation/places_providers.dart';
-
-/// Hands a link to the phone; false when nothing could open it.
-typedef OpenLink = Future<bool> Function(Uri uri);
-
-final Provider<OpenLink> openLinkProvider = Provider<OpenLink>(
-  (Ref ref) =>
-      (Uri uri) => launchUrl(uri, mode: LaunchMode.externalApplication),
-);
-
-/// A Google Maps link to [place], by Google's Maps URLs scheme: it opens the
-/// Maps app when installed and the website when not. Made-up demo places
-/// have no real place ID, so they are searched for by name only.
-Uri mapsLinkFor(Place place) => Uri.https('www.google.com', '/maps/search/', {
-  'api': '1',
-  'query': place.name,
-  if (!place.id.startsWith('demo-')) 'query_place_id': place.id,
-});
 
 /// Opens [ResultSheet] for [place]. It may grow past the usual 9/16 cap
 /// and scrolls, so large system text never cuts off its buttons.
@@ -52,19 +34,6 @@ class ResultSheet extends ConsumerWidget {
 
   final Place place;
   final VoidCallback onSpinAgain;
-
-  Future<void> _open(BuildContext context, WidgetRef ref) async {
-    final OverlayState overlay = Overlay.of(context, rootOverlay: true);
-    final bool opened = await ref.read(openLinkProvider)(mapsLinkFor(place));
-    if (!opened && context.mounted) {
-      showToast(
-        context,
-        "Couldn't open Google Maps",
-        failed: true,
-        overlay: overlay,
-      );
-    }
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -143,7 +112,7 @@ class ResultSheet extends ConsumerWidget {
             ],
             const SizedBox(height: AppSpacing.xxl),
             FilledButton(
-              onPressed: () => _open(context, ref),
+              onPressed: () => openInMaps(context, ref, place),
               child: const Text('Open in Google Maps'),
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -175,7 +144,7 @@ class ResultSheet extends ConsumerWidget {
               Align(
                 alignment: Alignment.centerLeft,
                 child: TextButton(
-                  onPressed: () => _open(context, ref),
+                  onPressed: () => openInMaps(context, ref, place),
                   style: TextButton.styleFrom(
                     padding: EdgeInsets.zero,
                     minimumSize: const Size(48, 48),

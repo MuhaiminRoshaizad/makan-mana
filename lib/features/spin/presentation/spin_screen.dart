@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show ProviderException;
 
 import '../../../core/theme/app_tokens.dart';
+import '../../../core/widgets/status_message.dart';
 import '../../location/domain/location_repository.dart';
+import '../../location/presentation/location_message.dart';
 import '../../location/presentation/location_providers.dart';
 import '../../places/domain/place.dart';
 import '../../places/presentation/area_button.dart';
@@ -127,7 +129,7 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
                 const SizedBox(height: AppSpacing.md),
                 Expanded(
                   child: switch (places) {
-                    AsyncData<List<Place>>() => _Message(
+                    AsyncData<List<Place>>() => StatusMessage(
                       title: 'Nothing nearby passes these filters',
                       body:
                           'Lower the rating or the number of reviews to bring '
@@ -270,9 +272,9 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
     while (error is ProviderException) {
       error = error.exception;
     }
-    if (error is NeedsLocation) return _location(error.state);
+    if (error is NeedsLocation) return LocationMessage(error.state);
     if (error is PlacesUnavailable) {
-      return const _Message(
+      return const StatusMessage(
         title: 'No places in this build',
         body:
             "Places are added when the app is built on the developer's "
@@ -280,47 +282,12 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
             'with.',
       );
     }
-    return _Message(
+    return StatusMessage(
       title: "Couldn't find places nearby",
       body: 'Check your connection, then try again.',
       action: 'Try again',
       onAction: () => ref.invalidate(nearbyPlacesProvider),
     );
-  }
-
-  /// What to do while there is no position to search round.
-  Widget _location(LocationState state) {
-    final LocationNotifier location = ref.read(locationProvider.notifier);
-    return switch (state) {
-      RefusedForGood() => _Message(
-        title: 'Location is off for Makan Mana',
-        body:
-            'Allow it in Settings, under Location, to find places to eat near '
-            'you.',
-        action: 'Open Settings',
-        onAction: location.ask,
-      ),
-      LocationOff() => _Message(
-        title: 'Location is turned off',
-        body: 'Turn on location to find places to eat near you.',
-        action: 'Turn on location',
-        onAction: location.ask,
-      ),
-      PositionUnavailable() => _Message(
-        title: "Couldn't tell where you are",
-        body: 'Move somewhere with a clearer view of the sky, then try again.',
-        action: 'Try again',
-        onAction: location.recheck,
-      ),
-      _ => _Message(
-        title: 'Find places near you',
-        body:
-            'Makan Mana uses where you are to fill the wheel with places '
-            'nearby. Your location stays on your phone.',
-        action: 'Use my location',
-        onAction: location.ask,
-      ),
-    };
   }
 }
 
@@ -518,53 +485,3 @@ class _Bone extends StatelessWidget {
 
 /// A centred title, a line of help and an optional action, for when there
 /// is no wheel to show.
-class _Message extends StatelessWidget {
-  const _Message({
-    required this.title,
-    required this.body,
-    this.action,
-    this.onAction,
-  });
-
-  final String title;
-  final String body;
-  final String? action;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 22,
-                height: 1.25,
-                fontWeight: FontWeight.w800,
-                color: AppColors.ink,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              body,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 16,
-                height: 1.45,
-                color: AppColors.muted,
-              ),
-            ),
-            if (action != null) ...<Widget>[
-              const SizedBox(height: AppSpacing.xxl),
-              FilledButton(onPressed: onAction, child: Text(action!)),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}

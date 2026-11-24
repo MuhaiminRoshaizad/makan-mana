@@ -7,6 +7,7 @@ import 'package:makan_mana/features/places/domain/opening_hours.dart';
 import 'package:makan_mana/features/places/domain/place.dart';
 import 'package:makan_mana/features/places/domain/review.dart';
 import 'package:makan_mana/features/places/presentation/places_providers.dart';
+import 'package:makan_mana/features/places/presentation/maps_link.dart';
 import 'package:makan_mana/features/spin/presentation/result_sheet.dart';
 
 const Place mamak = Place(

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:makan_mana/features/spin/presentation/wheel_colors.dart';
+import 'package:makan_mana/core/theme/wedge_colors.dart';
 import 'package:makan_mana/features/spin/presentation/wheel_painter.dart';
 
 void main() {
