@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:makan_mana/core/theme/app_theme.dart';
+import 'package:makan_mana/features/places/domain/opening_hours.dart';
 import 'package:makan_mana/features/places/domain/place.dart';
+import 'package:makan_mana/features/places/domain/review.dart';
+import 'package:makan_mana/features/places/presentation/places_providers.dart';
 import 'package:makan_mana/features/spin/presentation/result_sheet.dart';
 
 const Place mamak = Place(
@@ -36,6 +39,7 @@ void main() {
   Future<void> show(
     WidgetTester tester, {
     Place place = mamak,
+    DateTime? now,
     TextScaler scaler = TextScaler.noScaling,
   }) async {
     opened = <Uri>[];
@@ -51,6 +55,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          clockProvider.overrideWithValue(
+            () => now ?? DateTime(2026, 11, 24, 12),
+          ),
           openLinkProvider.overrideWithValue((Uri uri) async {
             opened.add(uri);
             return canOpen;
@@ -170,5 +177,67 @@ void main() {
       tester.getRect(find.text('Spin again')).bottom,
       lessThanOrEqualTo(915 - 48),
     );
+  });
+
+  const List<(int, int)> lunchToNight = <(int, int)>[(660, 1290)];
+  final Place kafe = Place(
+    id: 'ChIJ-kafe',
+    name: 'Kafe Bertam',
+    rating: 4.5,
+    reviewCount: 446,
+    distanceMetres: 300,
+    openNow: true,
+    hours: const OpeningHours(<List<(int, int)>>[
+      <(int, int)>[],
+      lunchToNight,
+      lunchToNight,
+      lunchToNight,
+      lunchToNight,
+      lunchToNight,
+      lunchToNight,
+    ]),
+    reviews: <Review>[
+      Review(rating: 5, month: DateTime(2026, 8), text: 'Sedap, fast service.'),
+      Review(rating: 3, month: DateTime(2025, 11), text: 'Okay only.'),
+    ],
+  );
+
+  testWidgets('it says whether the place is open, in 24-hour time', (
+    WidgetTester tester,
+  ) async {
+    await show(tester, place: kafe);
+    expect(find.text('Open until 21:30'), findsOneWidget);
+  });
+
+  testWidgets('on its day off it says when it opens next', (
+    WidgetTester tester,
+  ) async {
+    // Monday 23/11/2026.
+    await show(tester, place: kafe, now: DateTime(2026, 11, 23, 12));
+    expect(find.text('Closed, opens tomorrow 11:00'), findsOneWidget);
+  });
+
+  testWidgets('reviews follow the buttons, each with its stars and age', (
+    WidgetTester tester,
+  ) async {
+    await show(tester, place: kafe);
+    expect(find.text('Sedap, fast service.'), findsOneWidget);
+    expect(find.text('3 months ago'), findsOneWidget);
+    expect(find.text('A year ago'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('5 out of 5 stars')), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Open in Google Maps')).dy,
+      // The figures card has a Reviews label too; the heading is the last.
+      lessThan(tester.getTopLeft(find.text('Reviews').last).dy),
+    );
+  });
+
+  testWidgets('a place without hours or reviews shows neither', (
+    WidgetTester tester,
+  ) async {
+    await show(tester);
+    expect(find.textContaining('Open until'), findsNothing);
+    // Only the figures card's label, no reviews heading.
+    expect(find.text('Reviews'), findsOneWidget);
   });
 }

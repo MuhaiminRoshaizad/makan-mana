@@ -27,6 +27,11 @@ final PlacesSource placesSource = const bool.fromEnvironment('MAKAN_MANA_DEMO')
 
 bool get demoMode => placesSource == PlacesSource.demo;
 
+/// The time now, for anything that depends on it, such as open or closed.
+/// Tests give it a fixed time.
+final Provider<DateTime Function()> clockProvider =
+    Provider<DateTime Function()>((Ref ref) => DateTime.now);
+
 /// The most places the wheel holds; more would make the wedges unreadable.
 /// Google's Nearby Search returns 20 at most as well.
 const int wheelMaxPlaces = 20;

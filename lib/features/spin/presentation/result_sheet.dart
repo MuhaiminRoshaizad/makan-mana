@@ -8,6 +8,8 @@ import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_sheet.dart';
 import '../../../core/widgets/toast.dart';
 import '../../places/domain/place.dart';
+import '../../places/domain/review.dart';
+import '../../places/presentation/hours_text.dart';
 import '../../places/presentation/places_providers.dart';
 
 /// Hands a link to the phone; false when nothing could open it.
@@ -67,6 +69,7 @@ class ResultSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final double? rating = place.rating;
+    final DateTime now = ref.read(clockProvider)();
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
@@ -115,6 +118,29 @@ class ResultSheet extends ConsumerWidget {
                 (formatDistance(place.distanceMetres), 'Away', false),
               ],
             ),
+            if (place.hours case final hours?) ...<Widget>[
+              const SizedBox(height: AppSpacing.md),
+              Row(
+                children: <Widget>[
+                  const Icon(
+                    CupertinoIcons.clock,
+                    size: 17,
+                    color: AppColors.muted,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Flexible(
+                    child: Text(
+                      hoursLine(hours, now),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: AppSpacing.xxl),
             FilledButton(
               onPressed: () => _open(context, ref),
@@ -125,6 +151,23 @@ class ResultSheet extends ConsumerWidget {
               onPressed: onSpinAgain,
               child: const Text('Spin again'),
             ),
+            if (place.reviews.isNotEmpty) ...<Widget>[
+              const SizedBox(height: AppSpacing.xxl),
+              Semantics(
+                header: true,
+                child: const Text(
+                  'Reviews',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                    color: AppColors.ink,
+                  ),
+                ),
+              ),
+              for (final Review r in place.reviews)
+                _ReviewTile(review: r, now: now),
+            ],
             // Places from Google must say so; the demo's are made up.
             if (!demoMode) ...<Widget>[
               const SizedBox(height: AppSpacing.sm),
@@ -209,6 +252,73 @@ class _Stats extends StatelessWidget {
                 ),
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One review: its stars, how long ago, and what it says.
+class _ReviewTile extends StatelessWidget {
+  const _ReviewTile({required this.review, required this.now});
+
+  final Review review;
+  final DateTime now;
+
+  @override
+  Widget build(BuildContext context) {
+    final DateTime? month = review.month;
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.lg),
+      child: MergeSemantics(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Semantics(
+                  label: '${review.rating} out of 5 stars',
+                  child: ExcludeSemantics(
+                    child: Row(
+                      children: <Widget>[
+                        for (int i = 1; i <= 5; i++)
+                          Icon(
+                            i <= review.rating
+                                ? CupertinoIcons.star_fill
+                                : CupertinoIcons.star,
+                            size: 14,
+                            color: AppColors.ink,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (month != null) ...<Widget>[
+                  const SizedBox(width: AppSpacing.sm),
+                  Flexible(
+                    child: Text(
+                      monthsAgo(month, now),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              review.text,
+              maxLines: 6,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 15,
+                height: 1.45,
+                color: AppColors.ink,
+              ),
+            ),
           ],
         ),
       ),
