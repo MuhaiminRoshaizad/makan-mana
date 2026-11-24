@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/services.dart' show rootBundle;
 
 import '../domain/opening_hours.dart';
@@ -75,27 +76,34 @@ class BundledPlacesRepository implements PlacesRepository {
       throw const NoBundledPlaces();
     }
     try {
-      final Map<String, dynamic> places =
-          (jsonDecode(text) as Map<String, dynamic>)['places']
-              as Map<String, dynamic>;
-      return <_Entry>[
-        for (final Object? raw in places.values)
-          if (raw is Map<String, dynamic> && raw['temporarilyClosed'] != true)
-            _Entry(
-              id: raw['id'] as String,
-              name: raw['name'] as String,
-              rating: (raw['rating'] as num?)?.toDouble(),
-              reviews: (raw['reviews'] as num?)?.toInt() ?? 0,
-              category: raw['category'] as String?,
-              lat: (raw['lat'] as num).toDouble(),
-              lon: (raw['lon'] as num).toDouble(),
-              hours: _hours(raw['hours']),
-              topReviews: _reviews(raw['topReviews']),
-            ),
-      ];
+      // A full list with hours and reviews is about 7 MB, which took 30 to
+      // 60 ms to decode on a desktop: several frames of a frozen skeleton
+      // if done on the UI thread, and more on a phone.
+      return await compute(_parse, text);
     } on Object catch (_) {
       throw const NoBundledPlaces();
     }
+  }
+
+  static List<_Entry> _parse(String text) {
+    final Map<String, dynamic> places =
+        (jsonDecode(text) as Map<String, dynamic>)['places']
+            as Map<String, dynamic>;
+    return <_Entry>[
+      for (final Object? raw in places.values)
+        if (raw is Map<String, dynamic> && raw['temporarilyClosed'] != true)
+          _Entry(
+            id: raw['id'] as String,
+            name: raw['name'] as String,
+            rating: (raw['rating'] as num?)?.toDouble(),
+            reviews: (raw['reviews'] as num?)?.toInt() ?? 0,
+            category: raw['category'] as String?,
+            lat: (raw['lat'] as num).toDouble(),
+            lon: (raw['lon'] as num).toDouble(),
+            hours: _hours(raw['hours']),
+            topReviews: _reviews(raw['topReviews']),
+          ),
+    ];
   }
 
   static const List<String> _days = <String>[
