@@ -7,6 +7,7 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../core/theme/wedge_colors.dart';
 import '../../places/domain/place.dart';
+import '../../places/domain/places_repository.dart';
 import 'map_geometry.dart';
 
 /// Everything the map shows, so the screen can say what it wants and the
@@ -24,6 +25,8 @@ class MapProps {
     required this.onPinTap,
     required this.onMapTap,
     required this.onMoved,
+    this.focus,
+    this.focusTick = 0,
   });
 
   /// The search centre, or while choosing a spot, where the map starts.
@@ -53,6 +56,11 @@ class MapProps {
 
   /// Where the middle of the map came to rest after a move.
   final void Function(double latitude, double longitude) onMoved;
+
+  /// A place to fly to, such as a spin's winner, each time [focusTick] goes
+  /// up.
+  final LatLon? focus;
+  final int focusTick;
 }
 
 typedef MapViewBuilder = Widget Function(MapProps props);
@@ -108,15 +116,23 @@ class _PlacesMapState extends State<PlacesMap> {
       _map!.setGeoJsonSource('area', _areaJson());
       _map!.setGeoJsonSource('you', _youJson());
     }
+    // With Reduce Motion the camera jumps instead of flying.
+    final bool still = MediaQuery.disableAnimationsOf(context);
     if (moved || was.recentre != _p.recentre) {
       _map!.animateCamera(
         CameraUpdate.newCameraPosition(_home()),
-        duration: AppMotion.long * 2,
+        duration: still ? Duration.zero : AppMotion.long * 2,
       );
     } else if (was.tilted != _p.tilted) {
       _map!.animateCamera(
         CameraUpdate.tiltTo(_p.tilted ? mapTilt : 0),
-        duration: AppMotion.long,
+        duration: still ? Duration.zero : AppMotion.long,
+      );
+    }
+    if (was.focusTick != _p.focusTick && _p.focus != null) {
+      _map!.animateCamera(
+        CameraUpdate.newLatLng(LatLng(_p.focus!.latitude, _p.focus!.longitude)),
+        duration: still ? Duration.zero : const Duration(milliseconds: 900),
       );
     }
   }

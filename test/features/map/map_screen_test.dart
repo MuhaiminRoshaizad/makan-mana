@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +11,7 @@ import 'package:makan_mana/features/location/presentation/location_providers.dar
 import 'package:makan_mana/features/map/presentation/map_screen.dart';
 import 'package:makan_mana/features/map/presentation/places_map.dart';
 import 'package:makan_mana/features/places/data/demo_places_repository.dart';
+import 'package:makan_mana/features/places/domain/place.dart';
 import 'package:makan_mana/features/places/domain/place_filters.dart';
 import 'package:makan_mana/features/places/domain/places_repository.dart';
 import 'package:makan_mana/features/places/presentation/maps_link.dart';
@@ -86,6 +89,7 @@ void main() {
     bool located = true,
     PlacesRepository places = const DemoPlacesRepository(delay: Duration.zero),
     TextScaler scaler = TextScaler.noScaling,
+    bool reduceMotion = false,
   }) async {
     await tester.binding.setSurfaceSize(const Size(412, 915));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -128,10 +132,12 @@ void main() {
         child: MaterialApp(
           theme: buildAppTheme(),
           builder: (BuildContext context, Widget? child) => MediaQuery(
-            data: MediaQuery.of(context).copyWith(textScaler: scaler),
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: scaler, disableAnimations: reduceMotion),
             child: child!,
           ),
-          home: const Scaffold(body: MapScreen()),
+          home: Scaffold(body: MapScreen(random: math.Random(7))),
         ),
       ),
     );
@@ -264,7 +270,7 @@ void main() {
     expect(shown, isNull);
   });
 
-  testWidgets('moving the map well away offers Search this area, which '
+  testWidgets('moving the map out of the ring offers Search this area, which '
       'searches round the new middle', (WidgetTester tester) async {
     await show(tester);
     Finder pill() => find.ancestor(
@@ -273,8 +279,9 @@ void main() {
     );
     bool offered() => !tester.widget<IgnorePointer>(pill().first).ignoring;
     expect(offered(), isFalse);
-    // 100 m is still the same area.
-    shown!.onMoved(area.latitude + 0.0009, area.longitude);
+    // Inside the 2 km ring, as when flying to a spin's winner: still the
+    // same area.
+    shown!.onMoved(area.latitude + 0.017, area.longitude);
     await tester.pumpAndSettle();
     expect(offered(), isFalse);
     shown!.onMoved(area.latitude + 0.02, area.longitude);
@@ -305,5 +312,63 @@ void main() {
       tester.getRect(find.text('Open in Google Maps')).bottom,
       lessThanOrEqualTo(915 - AppNavMetrics.clearance(48)),
     );
+  });
+
+  group('spin', () {
+    testWidgets('Spin hops across the pins, slowing, then lands on one and '
+        'flies there', (WidgetTester tester) async {
+      await show(tester);
+      await tester.tap(find.text('Spin'));
+      final Set<String> hops = <String>{};
+      for (int i = 0; i < 14; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        if (shown!.selectedId case final String id) hops.add(id);
+      }
+      expect(hops.length, greaterThanOrEqualTo(3));
+      await tester.pumpAndSettle();
+      expect(find.text('Today you are eating at'), findsOneWidget);
+      final String winner = shown!.selectedId!;
+      final Place p = shown!.places.firstWhere((Place x) => x.id == winner);
+      expect(find.text(p.name), findsOneWidget);
+      expect(shown!.focusTick, 1);
+      expect(shown!.focus, (latitude: p.latitude, longitude: p.longitude));
+      expect(find.text('Spin'), findsNothing);
+      // Putting the card away brings Spin back.
+      await tester.tap(find.byTooltip('Close'));
+      await tester.pumpAndSettle();
+      expect(find.text('Spin'), findsOneWidget);
+    });
+
+    testWidgets('with Reduce Motion it lands at once, without hops', (
+      WidgetTester tester,
+    ) async {
+      await show(tester, reduceMotion: true);
+      await tester.tap(find.text('Spin'));
+      await tester.pump();
+      expect(find.text('Today you are eating at'), findsOneWidget);
+      expect(shown!.focusTick, 1);
+    });
+
+    testWidgets('pins cannot be tapped mid-spin, and a tapped pin is not '
+        'called the winner', (WidgetTester tester) async {
+      await show(tester);
+      await tester.tap(find.text('Spin'));
+      await tester.pump(const Duration(milliseconds: 50));
+      final String? hop = shown!.selectedId;
+      final String other = shown!.places
+          .firstWhere((Place x) => x.id != hop)
+          .id;
+      shown!.onPinTap(other);
+      await tester.pump();
+      expect(shown!.selectedId, hop);
+      // The hops run on timers, which pumpAndSettle does not wait for.
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Close'));
+      await tester.pumpAndSettle();
+      shown!.onPinTap(other);
+      await tester.pumpAndSettle();
+      expect(find.text('Today you are eating at'), findsNothing);
+    });
   });
 }

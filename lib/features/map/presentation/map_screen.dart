@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/format/formatters.dart';
@@ -20,14 +22,77 @@ import 'places_map.dart';
 
 /// The Map tab: the places on the wheel, round the search centre.
 class MapScreen extends ConsumerStatefulWidget {
-  const MapScreen({super.key});
+  const MapScreen({super.key, this.random});
+
+  /// Picks the spin's hops and winner; tests pass a seeded one.
+  final math.Random? random;
 
   @override
   ConsumerState<MapScreen> createState() => _MapScreenState();
 }
 
 class _MapScreenState extends ConsumerState<MapScreen> {
+  late final math.Random _random = widget.random ?? math.Random();
   String? _selected;
+
+  /// The pin lit up while a spin hops across the map.
+  String? _hop;
+  bool _spinning = false;
+
+  /// Whether the card shows a spin's winner rather than a tapped pin.
+  bool _won = false;
+  LatLon? _focus;
+  int _focusTick = 0;
+
+  /// How long each hop of a spin lasts, slowing down, with a last pause
+  /// before the winner.
+  static const List<int> _hopMs = <int>[90, 110, 140, 190, 260, 620];
+
+  /// Picks a place by hopping across a few pins, then flies to the winner.
+  Future<void> _spin(List<Place> list) async {
+    if (_spinning || list.isEmpty) return;
+    final bool still = MediaQuery.disableAnimationsOf(context);
+    setState(() {
+      _spinning = true;
+      _selected = null;
+    });
+    Place pick(String? not) {
+      while (true) {
+        final Place p = list[_random.nextInt(list.length)];
+        if (p.id != not || list.length == 1) return p;
+      }
+    }
+
+    String? last;
+    if (!still) {
+      for (final int ms in _hopMs) {
+        last = pick(last).id;
+        setState(() => _hop = last);
+        unawaited(HapticFeedback.selectionClick());
+        await Future<void>.delayed(Duration(milliseconds: ms));
+        if (!mounted) return;
+      }
+    }
+    final Place winner = pick(last);
+    unawaited(HapticFeedback.mediumImpact());
+    setState(() {
+      _hop = null;
+      _spinning = false;
+      _selected = winner.id;
+      _won = true;
+      _focus = (latitude: winner.latitude, longitude: winner.longitude);
+      _focusTick++;
+    });
+  }
+
+  void _select(String? id) {
+    if (_spinning) return;
+    setState(() {
+      _selected = id;
+      _won = false;
+    });
+  }
+
   bool _tilted = true;
   int _recentre = 0;
 
@@ -76,6 +141,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final bool showMap = here != null || choosing;
     final double latitude = here?.latitude ?? start?.latitude ?? 0;
     final double longitude = here?.longitude ?? start?.longitude ?? 0;
+    // Search this area is offered once the middle of the map leaves the
+    // ring. A flight to a spin's winner stays inside it, so never does.
     final bool strayed =
         here != null &&
         _target != null &&
@@ -85,7 +152,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               _target!.latitude,
               _target!.longitude,
             ) >
-            math.max(200, here.radiusMetres * 0.25);
+            here.radiusMetres;
     return ColoredBox(
       color: AppColors.background,
       child: Stack(
@@ -98,13 +165,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   longitude: longitude,
                   radiusMetres: here?.radiusMetres,
                   places: here == null ? const <Place>[] : list,
-                  selectedId: selected?.id,
+                  selectedId: _hop ?? selected?.id,
                   tilted: _tilted,
                   recentre: _recentre,
                   bottomInset: clearance,
-                  onPinTap: (String id) => setState(() => _selected = id),
-                  onMapTap: () => setState(() => _selected = null),
+                  onPinTap: _select,
+                  onMapTap: () => _select(null),
                   onMoved: _moved,
+                  focus: _focus,
+                  focusTick: _focusTick,
                 ),
               ),
             ),
@@ -224,12 +293,20 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                         child: child,
                       ),
                     ),
-                child: selected == null
-                    ? const SizedBox.shrink()
-                    : _PinCard(
+                child: selected != null
+                    ? _PinCard(
                         key: ValueKey<String>(selected.id),
                         place: selected,
-                        onClose: () => setState(() => _selected = null),
+                        won: _won,
+                        onClose: () => _select(null),
+                      )
+                    : list.isEmpty || here == null
+                    ? const SizedBox.shrink()
+                    : Center(
+                        key: const ValueKey<String>('spin'),
+                        child: _SpinButton(
+                          onPressed: _spinning ? null : () => _spin(list),
+                        ),
                       ),
               ),
             ),
@@ -373,9 +450,17 @@ class _RoundButton extends StatelessWidget {
 
 /// The tapped place: what it is, whether it is open, and the way there.
 class _PinCard extends ConsumerWidget {
-  const _PinCard({super.key, required this.place, required this.onClose});
+  const _PinCard({
+    super.key,
+    required this.place,
+    required this.won,
+    required this.onClose,
+  });
 
   final Place place;
+
+  /// A spin's winner, so the card says so.
+  final bool won;
   final VoidCallback onClose;
 
   @override
@@ -418,6 +503,18 @@ class _PinCard extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
+                          if (won)
+                            const Padding(
+                              padding: EdgeInsets.only(bottom: AppSpacing.xs),
+                              child: Text(
+                                'Today you are eating at',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.muted,
+                                ),
+                              ),
+                            ),
                           Text(
                             place.name,
                             style: const TextStyle(
@@ -597,6 +694,32 @@ class _Appear extends StatelessWidget {
             child: child,
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Spins from the map: hops across the pins and lands on one.
+class _SpinButton extends StatelessWidget {
+  const _SpinButton({required this.onPressed});
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const ShapeDecoration(
+        shape: StadiumBorder(),
+        shadows: _floatShadow,
+      ),
+      child: FilledButton(
+        onPressed: onPressed,
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(140, 56),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxxl),
+          disabledBackgroundColor: AppColors.ink,
+          disabledForegroundColor: AppColors.surface,
+        ),
+        child: const Text('Spin'),
       ),
     );
   }
