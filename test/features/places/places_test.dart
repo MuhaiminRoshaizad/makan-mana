@@ -145,6 +145,9 @@ void main() {
 }
 
 class _Counting implements PlacesRepository {
+  @override
+  bool get knowsOpeningHours => true;
+
   _Counting(this.onSearch);
   final void Function() onSearch;
 

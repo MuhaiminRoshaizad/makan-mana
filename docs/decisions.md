@@ -204,3 +204,23 @@ text has to fit in both.
 
 **Costs:** every screen is laid out and tested twice. In landscape a phone
 is only about 400 dp tall, so the wheel is smaller there.
+
+## 017: Places from a list built into the app
+
+**Decided:** places, with their ratings and review counts, come from a list
+prepared each month on the developer's computer, kept out of the repository
+and bundled into the app when it is built there. Every screen reads places
+through `PlacesRepository`, and a build-time switch picks the source
+(`MAKAN_MANA_PLACES`, with `demo` for made-up places), so a live source such
+as Google Places can replace the list later without touching any screen.
+This replaces the live Google search of 007 for now; 007 and 008 apply again
+if it returns.
+
+**Why:** Places API needs a Cloud billing account, and with a debit card
+Google asks for an RM120 deposit before any use. The list costs nothing and
+still has the ratings and review counts the filters need.
+
+**Costs:** places exist only where the list covers, so far the mainland side
+of Penang. Ratings can be up to a month old. The list has no opening hours,
+so Open now is not offered with it. A new list means a new build, and a build
+made elsewhere, such as on CI, has no places at all.

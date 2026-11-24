@@ -244,10 +244,11 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
   Widget _failed(Object error) {
     if (error is PlacesUnavailable) {
       return const _Message(
-        title: 'Finding places is not set up yet',
+        title: 'No places in this build',
         body:
-            'This build cannot search Google for places. Run the demo build '
-            'to try the wheel with sample places.',
+            "Places are added when the app is built on the developer's "
+            'computer. The demo build has sample places to try the wheel '
+            'with.',
       );
     }
     return _Message(

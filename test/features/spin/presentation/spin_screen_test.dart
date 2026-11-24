@@ -21,6 +21,9 @@ const SearchArea area = SearchArea(
 
 /// Answers from the demo places, or fails, after [delay].
 class _Repo implements PlacesRepository {
+  @override
+  bool get knowsOpeningHours => true;
+
   _Repo({this.delay = Duration.zero, this.fail = false});
   final Duration delay;
   bool fail;
@@ -164,7 +167,7 @@ void main() {
       'rather than inventing any', (WidgetTester tester) async {
     await show(tester, demo: false);
     await loaded(tester);
-    expect(find.text('Finding places is not set up yet'), findsOneWidget);
+    expect(find.text('No places in this build'), findsOneWidget);
     expect(find.byType(SpinWheel), findsNothing);
   });
 

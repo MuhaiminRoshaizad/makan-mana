@@ -7,9 +7,10 @@ class Place {
     required this.reviewCount,
     required this.distanceMetres,
     required this.openNow,
+    this.category,
   });
 
-  /// Google's place ID, the one field the app may keep between sessions.
+  /// Google's place ID.
   final String id;
   final String name;
 
@@ -20,6 +21,9 @@ class Place {
   /// Straight-line distance from the search centre.
   final int distanceMetres;
 
-  /// Null when Google does not know its opening hours.
+  /// Null when the source does not know its opening hours.
   final bool? openNow;
+
+  /// What kind of place it is, such as "Malay Restaurant", when known.
+  final String? category;
 }

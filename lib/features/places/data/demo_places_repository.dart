@@ -11,6 +11,9 @@ class DemoPlacesRepository implements PlacesRepository {
   final Duration delay;
 
   @override
+  bool get knowsOpeningHours => true;
+
+  @override
   Future<List<Place>> nearby(SearchArea area) async {
     await Future<void>.delayed(delay);
     final List<Place> all = <Place>[

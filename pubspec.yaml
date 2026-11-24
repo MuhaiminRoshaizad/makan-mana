@@ -62,6 +62,11 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  # The places list bundled into builds made on the developer's machine;
+  # the file itself is private and never committed (docs/decisions.md 017).
+  assets:
+    - assets/places/
+
   fonts:
     - family: PlusJakartaSans
       fonts:
