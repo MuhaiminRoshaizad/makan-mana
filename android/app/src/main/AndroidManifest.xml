@@ -4,6 +4,10 @@
          open. Coarse is listed too, so Android 12+ can offer "approximate". -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- The map's tiles come over the network. Flutter's template grants this
+         only to debug and profile builds, so without it a release map stays
+         blank. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="Makan Mana"
         android:name="${applicationName}"
