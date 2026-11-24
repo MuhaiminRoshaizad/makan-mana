@@ -43,3 +43,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Data kept on this machine only (places, scraper progress)
+*.private.*
