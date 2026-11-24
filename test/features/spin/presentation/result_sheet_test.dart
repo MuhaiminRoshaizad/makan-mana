@@ -232,6 +232,17 @@ void main() {
     );
   });
 
+  testWidgets('with more reviews on Google than kept, a link opens the place '
+      'there to read them all', (WidgetTester tester) async {
+    await show(tester, place: kafe);
+    await tester.ensureVisible(
+      find.text('Read all 446 reviews on Google Maps'),
+    );
+    await tester.tap(find.text('Read all 446 reviews on Google Maps'));
+    await tester.pump();
+    expect(opened.single.queryParameters['query_place_id'], 'ChIJ-kafe');
+  });
+
   testWidgets('a place without hours or reviews shows neither', (
     WidgetTester tester,
   ) async {

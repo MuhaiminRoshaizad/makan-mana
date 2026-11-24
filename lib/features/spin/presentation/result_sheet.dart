@@ -168,6 +168,31 @@ class ResultSheet extends ConsumerWidget {
               for (final Review r in place.reviews)
                 _ReviewTile(review: r, now: now),
             ],
+            // The list keeps a few reviews; Google Maps has them all, in
+            // any order, newest first included.
+            if (place.reviewCount > place.reviews.length) ...<Widget>[
+              const SizedBox(height: AppSpacing.md),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: () => _open(context, ref),
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(48, 48),
+                    textStyle: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                  child: Text(
+                    place.reviewCount == 1
+                        ? 'Read the review on Google Maps'
+                        : 'Read all ${formatCount(place.reviewCount)} reviews on Google Maps',
+                  ),
+                ),
+              ),
+            ],
             // Places from Google must say so; the demo's are made up.
             if (!demoMode) ...<Widget>[
               const SizedBox(height: AppSpacing.sm),
