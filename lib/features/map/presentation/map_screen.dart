@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/format/formatters.dart';
 import '../../../core/theme/app_tokens.dart';
+import '../../../core/widgets/size_reporter.dart';
 import '../../../core/widgets/status_message.dart';
 import '../../location/domain/location_repository.dart';
 import '../../location/presentation/location_message.dart';
@@ -43,6 +44,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   bool _won = false;
   LatLon? _focus;
   int _focusTick = 0;
+
+  /// The height of the card or panel at the foot of the map, which the
+  /// map's attribution must stay above to remain visible.
+  double _panel = 0;
+
+  void _panelSize(Size size) {
+    if (mounted && size.height != _panel) setState(() => _panel = size.height);
+  }
 
   /// How long each hop of a spin lasts, slowing down, with a last pause
   /// before the winner.
@@ -168,7 +177,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   selectedId: _hop ?? selected?.id,
                   tilted: _tilted,
                   recentre: _recentre,
-                  bottomInset: clearance,
+                  bottomInset:
+                      clearance + (_panel > 0 ? _panel + AppSpacing.sm : 0),
                   onPinTap: _select,
                   onMapTap: () => _select(null),
                   onMoved: _moved,
@@ -209,9 +219,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               left: AppSpacing.lg,
               right: AppSpacing.lg,
               bottom: clearance,
-              child: _ChooseSpot(
-                state: needs,
-                onSearch: () => _searchHere(start),
+              child: SizeReporter(
+                onSize: _panelSize,
+                child: _ChooseSpot(
+                  state: needs,
+                  onSearch: () => _searchHere(start),
+                ),
               ),
             ),
           ] else ...<Widget>[
@@ -276,38 +289,41 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               left: AppSpacing.lg,
               right: AppSpacing.lg,
               bottom: clearance,
-              child: AnimatedSwitcher(
-                duration: MediaQuery.disableAnimationsOf(context)
-                    ? Duration.zero
-                    : AppMotion.medium,
-                switchInCurve: AppMotion.enter,
-                switchOutCurve: AppMotion.exit,
-                transitionBuilder: (Widget child, Animation<double> a) =>
-                    FadeTransition(
-                      opacity: a,
-                      child: SlideTransition(
-                        position: Tween<Offset>(
-                          begin: const Offset(0, 0.15),
-                          end: Offset.zero,
-                        ).animate(a),
-                        child: child,
-                      ),
-                    ),
-                child: selected != null
-                    ? _PinCard(
-                        key: ValueKey<String>(selected.id),
-                        place: selected,
-                        won: _won,
-                        onClose: () => _select(null),
-                      )
-                    : list.isEmpty || here == null
-                    ? const SizedBox.shrink()
-                    : Center(
-                        key: const ValueKey<String>('spin'),
-                        child: _SpinButton(
-                          onPressed: _spinning ? null : () => _spin(list),
+              child: SizeReporter(
+                onSize: _panelSize,
+                child: AnimatedSwitcher(
+                  duration: MediaQuery.disableAnimationsOf(context)
+                      ? Duration.zero
+                      : AppMotion.medium,
+                  switchInCurve: AppMotion.enter,
+                  switchOutCurve: AppMotion.exit,
+                  transitionBuilder: (Widget child, Animation<double> a) =>
+                      FadeTransition(
+                        opacity: a,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(0, 0.15),
+                            end: Offset.zero,
+                          ).animate(a),
+                          child: child,
                         ),
                       ),
+                  child: selected != null
+                      ? _PinCard(
+                          key: ValueKey<String>(selected.id),
+                          place: selected,
+                          won: _won,
+                          onClose: () => _select(null),
+                        )
+                      : list.isEmpty || here == null
+                      ? const SizedBox.shrink()
+                      : Center(
+                          key: const ValueKey<String>('spin'),
+                          child: _SpinButton(
+                            onPressed: _spinning ? null : () => _spin(list),
+                          ),
+                        ),
+                ),
               ),
             ),
           ],

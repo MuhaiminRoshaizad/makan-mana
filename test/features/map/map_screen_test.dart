@@ -181,6 +181,24 @@ void main() {
     expect(find.text(name), findsNothing);
   });
 
+  testWidgets('the map keeps its attribution above the card at its foot, '
+      'as OpenStreetMap asks', (WidgetTester tester) async {
+    await show(tester);
+    shown!.onPinTap(shown!.places.first.id);
+    await tester.pumpAndSettle();
+    final double cardTop = tester
+        .getRect(
+          find
+              .ancestor(
+                of: find.text('Open in Google Maps'),
+                matching: find.byType(DecoratedBox),
+              )
+              .first,
+        )
+        .top;
+    expect(915 - shown!.bottomInset, lessThanOrEqualTo(cardTop));
+  });
+
   testWidgets('a card for a place the filters then take off goes too', (
     WidgetTester tester,
   ) async {
