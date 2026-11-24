@@ -121,10 +121,10 @@ void main() {
       'one under the arrow named above it', (WidgetTester tester) async {
     await show(tester);
     await loaded(tester);
-    expect(find.text('14 places on the wheel'), findsOneWidget);
+    expect(find.text('15 places on the wheel'), findsOneWidget);
     expect(find.text('Throw the wheel, or tap Spin'), findsOneWidget);
     final SpinWheel wheel = tester.widget<SpinWheel>(find.byType(SpinWheel));
-    expect(wheel.names, hasLength(14));
+    expect(wheel.names, hasLength(15));
     // The name above the wheel is one of the places on it.
     expect(
       wheel.names.where((String n) => find.text(n).evaluate().isNotEmpty),
@@ -244,7 +244,7 @@ void main() {
       await loaded(tester);
       expect(tester.takeException(), isNull);
       final Rect wheel = tester.getRect(find.byType(SpinWheel));
-      final Rect count = tester.getRect(find.text('14 places on the wheel'));
+      final Rect count = tester.getRect(find.text('15 places on the wheel'));
       expect(count.right, lessThan(wheel.left));
       // 412 minus the floating bar's 60 dp and its 12 dp gap.
       expect(wheel.bottom, lessThanOrEqualTo(412 - 60 - 12));

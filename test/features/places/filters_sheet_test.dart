@@ -87,25 +87,25 @@ void main() {
   ) async {
     await show(tester);
     expect(find.bySemanticsLabel('Filters, 3 in use'), findsOneWidget);
-    expect(find.text('on wheel: 14'), findsOneWidget);
+    expect(find.text('on wheel: 15'), findsOneWidget);
   });
 
   testWidgets('choosing filters counts the matches live and applies them '
       'with Show', (WidgetTester tester) async {
     await show(tester);
     await open(tester);
-    expect(find.text('Show 14 places'), findsOneWidget);
+    expect(find.text('Show 15 places'), findsOneWidget);
 
     await tester.tap(find.text('Any').first);
     await tester.pumpAndSettle();
     // Rating no longer filters: the three rated under 4.0 come back.
-    expect(find.text('Show 17 places'), findsOneWidget);
-    expect(find.text('on wheel: 14'), findsOneWidget);
+    expect(find.text('Show 18 places'), findsOneWidget);
+    expect(find.text('on wheel: 15'), findsOneWidget);
 
-    await tester.tap(find.text('Show 17 places'));
+    await tester.tap(find.text('Show 18 places'));
     await tester.pumpAndSettle();
     expect(find.text('Minimum rating'), findsNothing);
-    expect(find.text('on wheel: 17'), findsOneWidget);
+    expect(find.text('on wheel: 18'), findsOneWidget);
     expect(find.bySemanticsLabel('Filters, 2 in use'), findsOneWidget);
   });
 
@@ -136,7 +136,7 @@ void main() {
     // Tap above the sheet to close it.
     await tester.tapAt(const Offset(200, 20));
     await tester.pumpAndSettle();
-    expect(find.text('on wheel: 14'), findsOneWidget);
+    expect(find.text('on wheel: 15'), findsOneWidget);
     expect(find.bySemanticsLabel('Filters, 3 in use'), findsOneWidget);
   });
 
@@ -163,7 +163,7 @@ void main() {
       tester.widget<CupertinoSwitch>(find.byType(CupertinoSwitch)).value,
       isTrue,
     );
-    expect(find.text('Show 14 places'), findsOneWidget);
+    expect(find.text('Show 15 places'), findsOneWidget);
   });
 
   testWidgets('with large system text the sheet fits and Show stays above '
@@ -174,7 +174,7 @@ void main() {
     await tester.drag(find.text('Minimum rating'), const Offset(0, -600));
     await tester.pumpAndSettle();
     expect(
-      tester.getRect(find.text('Show 14 places')).bottom,
+      tester.getRect(find.text('Show 15 places')).bottom,
       lessThanOrEqualTo(915 - 48),
     );
   });

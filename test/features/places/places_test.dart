@@ -27,17 +27,17 @@ const SearchArea area = SearchArea(
 );
 
 void main() {
-  group('the default filters (4.0 and up, 50 reviews, open now)', () {
+  group('the default filters (4.0 and up, 20 reviews, open now)', () {
     const PlaceFilters f = PlaceFilters();
 
     test('keep a well-rated, reviewed place that is open', () {
       expect(f.passes(place()), isTrue);
-      expect(f.passes(place(rating: 4.0, reviews: 50)), isTrue);
+      expect(f.passes(place(rating: 4.0, reviews: 20)), isTrue);
     });
 
     test('drop one rated too low, too little reviewed, or closed', () {
       expect(f.passes(place(rating: 3.9)), isFalse);
-      expect(f.passes(place(reviews: 49)), isFalse);
+      expect(f.passes(place(reviews: 19)), isFalse);
       expect(f.passes(place(open: false)), isFalse);
     });
 
@@ -60,7 +60,7 @@ void main() {
     expect(off.passes(place(rating: null, reviews: 0, open: null)), isTrue);
   });
 
-  test('the demo finds 20 places nearest first, 14 of which pass the '
+  test('the demo finds 20 places nearest first, 15 of which pass the '
       'default filters', () async {
     final List<Place> all = await const DemoPlacesRepository(
       delay: Duration.zero,
@@ -72,7 +72,7 @@ void main() {
         greaterThanOrEqualTo(all[i - 1].distanceMetres),
       );
     }
-    expect(all.where(const PlaceFilters().passes), hasLength(14));
+    expect(all.where(const PlaceFilters().passes), hasLength(15));
   });
 
   test('the demo keeps only places inside the radius', () async {
@@ -101,7 +101,7 @@ void main() {
         (_, _) {},
       );
       await c.read(nearbyPlacesProvider.future);
-      expect(sub.read().value, hasLength(14));
+      expect(sub.read().value, hasLength(15));
 
       c
           .read(filtersProvider.notifier)

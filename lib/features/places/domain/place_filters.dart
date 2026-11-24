@@ -4,7 +4,7 @@ import 'place.dart';
 class PlaceFilters {
   const PlaceFilters({
     this.minRating = 4.0,
-    this.minReviews = 50,
+    this.minReviews = 20,
     this.openNow = true,
   });
 

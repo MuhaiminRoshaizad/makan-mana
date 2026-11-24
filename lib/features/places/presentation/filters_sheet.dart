@@ -17,6 +17,7 @@ const List<(String, double?)> ratingSteps = <(String, double?)>[
 ];
 const List<(String, int)> reviewSteps = <(String, int)>[
   ('Any', 0),
+  ('20+', 20),
   ('50+', 50),
   ('200+', 200),
   ('500+', 500),

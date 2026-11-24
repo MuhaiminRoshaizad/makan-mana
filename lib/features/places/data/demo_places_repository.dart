@@ -3,7 +3,7 @@ import '../domain/places_repository.dart';
 
 /// Twenty made-up places for the demo build, so the app can be tried and
 /// screenshotted without a Google key. Six of them fail the default
-/// filters, which leaves 14 on the wheel.
+/// filters, which leaves 15 on the wheel.
 class DemoPlacesRepository implements PlacesRepository {
   const DemoPlacesRepository({this.delay = const Duration(milliseconds: 900)});
 
