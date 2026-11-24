@@ -35,9 +35,10 @@ bool get demoMode => placesSource == PlacesSource.demo;
 final Provider<DateTime Function()> clockProvider =
     Provider<DateTime Function()>((Ref ref) => DateTime.now);
 
-/// The most places the wheel holds; more would make the wedges unreadable.
-/// Google's Nearby Search returns 20 at most as well.
-const int wheelMaxPlaces = 20;
+/// How far round the centre the app looks: as far as the places list
+/// reaches (docs/decisions.md 017). The Distance filter narrows it, so the
+/// filters can count matches at any distance without searching again.
+const int searchRadiusMetres = 15000;
 
 /// Raised while the app has no way to find places: the source has nothing
 /// in this build.
@@ -70,18 +71,6 @@ class NeedsLocation implements Exception {
   final LocationState state;
 }
 
-/// How far round the centre to search, in metres; the search area sheet
-/// changes it.
-final NotifierProvider<RadiusNotifier, int> radiusProvider =
-    NotifierProvider<RadiusNotifier, int>(RadiusNotifier.new);
-
-class RadiusNotifier extends Notifier<int> {
-  @override
-  int build() => 2000;
-
-  void set(int metres) => state = metres;
-}
-
 /// A spot the person chose on the map instead of their location
 /// (docs/decisions.md 003); null while searching round the phone.
 final NotifierProvider<PinNotifier, LatLon?> pinProvider =
@@ -106,7 +95,7 @@ final FutureProvider<LatLon?> mapStartProvider = FutureProvider<LatLon?>(
 /// or in the demo round Dataran Merdeka.
 final FutureProvider<SearchArea> searchAreaProvider =
     FutureProvider<SearchArea>((Ref ref) async {
-      final int radius = ref.watch(radiusProvider);
+      const int radius = searchRadiusMetres;
       final LatLon? pin = ref.watch(pinProvider);
       if (pin != null) {
         return SearchArea(
@@ -163,16 +152,11 @@ final FutureProvider<List<Place>> nearbyPlacesProvider =
       }
     }, retry: (_, _) => null);
 
-/// The places on the wheel: the nearest ones that pass the filters, up to
-/// [wheelMaxPlaces]. Changing a filter refilters what was found without
+/// The places on the wheel: the nearest ones that pass the filters, as many
+/// as the filters allow. Changing a filter refilters what was found without
 /// searching again.
 final Provider<AsyncValue<List<Place>>> wheelPlacesProvider =
     Provider<AsyncValue<List<Place>>>((Ref ref) {
       final PlaceFilters filters = ref.watch(filtersProvider);
-      return ref
-          .watch(nearbyPlacesProvider)
-          .whenData(
-            (List<Place> all) =>
-                all.where(filters.passes).take(wheelMaxPlaces).toList(),
-          );
+      return ref.watch(nearbyPlacesProvider).whenData(filters.pick);
     });

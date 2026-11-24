@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/format/formatters.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_sheet.dart';
 import '../domain/place.dart';
@@ -9,7 +10,25 @@ import '../domain/place_filters.dart';
 import '../domain/place_kind.dart';
 import 'places_providers.dart';
 
+/// The distances offered, in metres, up to the 15 km the places list
+/// covers.
+const List<int> distanceSteps = <int>[
+  500,
+  1000,
+  2000,
+  3000,
+  5000,
+  10000,
+  15000,
+];
+
 /// The steps each filter offers, as (label, value).
+const List<(String, int?)> placeCountSteps = <(String, int?)>[
+  ('5', 5),
+  ('10', 10),
+  ('20', 20),
+  ('All', null),
+];
 const List<(String, double?)> ratingSteps = <(String, double?)>[
   ('Any', null),
   ('3.5', 3.5),
@@ -47,7 +66,11 @@ class _FiltersSheetState extends ConsumerState<FiltersSheet> {
   @override
   Widget build(BuildContext context) {
     final List<Place>? nearby = ref.watch(nearbyPlacesProvider).value;
-    final int? matching = nearby?.where(_draft.passes).length;
+    final int? passing = nearby?.where(_draft.passes).length;
+    final int? max = _draft.maxPlaces;
+    final int? matching = passing == null || max == null
+        ? passing
+        : (passing < max ? passing : max);
     final FiltersNotifier filters = ref.read(filtersProvider.notifier);
     final bool hours = ref.watch(placesRepositoryProvider).knowsOpeningHours;
     return SingleChildScrollView(
@@ -90,6 +113,11 @@ class _FiltersSheetState extends ConsumerState<FiltersSheet> {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
+          _Distance(
+            metres: _draft.maxDistanceMetres,
+            onChanged: (int m) => _set(_draft.copyWith(maxDistanceMetres: m)),
+          ),
+          const SizedBox(height: AppSpacing.xxl),
           const _Label('Kind of place'),
           _Kinds(
             selected: _draft.kinds,
@@ -165,11 +193,43 @@ class _FiltersSheetState extends ConsumerState<FiltersSheet> {
               ),
             ),
           ],
+          const SizedBox(height: AppSpacing.xxl),
+          const _Label('Places on the wheel'),
+          _Segments(
+            label: 'Places on the wheel',
+            labels: <String>[for (final (String l, _) in placeCountSteps) l],
+            selected: placeCountSteps.indexWhere(
+              ((String, int?) s) => s.$2 == _draft.maxPlaces,
+            ),
+            onSelect: (int i) =>
+                _set(_draft.copyWith(maxPlaces: () => placeCountSteps[i].$2)),
+          ),
+          if (passing != null && passing > 0)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.xs,
+                AppSpacing.sm,
+                AppSpacing.xs,
+                0,
+              ),
+              child: Text(
+                max != null && passing > max
+                    ? 'The nearest $max of the $passing that pass.'
+                    : passing == 1
+                    ? 'The one place that passes.'
+                    : 'All $passing that pass.',
+                style: const TextStyle(
+                  fontSize: 13,
+                  height: 1.45,
+                  color: AppColors.muted,
+                ),
+              ),
+            ),
           const SizedBox(height: AppSpacing.xl),
           if (matching == 0) ...<Widget>[
             const Text(
-              'No places nearby pass these filters. Lower the rating or the '
-              'reviews.',
+              'No places pass these filters. Go further, or lower the rating '
+              'or the reviews.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 15, color: AppColors.muted),
             ),
@@ -191,6 +251,106 @@ class _FiltersSheetState extends ConsumerState<FiltersSheet> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// How far to look, from 500 m to 15 km. The Material slider, because it can
+/// say "2 km" to a screen reader; CupertinoSlider only says a percentage.
+class _Distance extends StatelessWidget {
+  const _Distance({required this.metres, required this.onChanged});
+
+  final int metres;
+  final ValueChanged<int> onChanged;
+
+  int get _step {
+    int best = 0;
+    for (int i = 0; i < distanceSteps.length; i++) {
+      if ((distanceSteps[i] - metres).abs() <
+          (distanceSteps[best] - metres).abs()) {
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        ExcludeSemantics(
+          child: Padding(
+            padding: const EdgeInsets.only(left: AppSpacing.xs),
+            child: Row(
+              children: <Widget>[
+                const Expanded(
+                  child: Text(
+                    'Distance',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.muted,
+                    ),
+                  ),
+                ),
+                Text(
+                  formatDistance(metres),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.ink,
+                    fontFeatures: <FontFeature>[FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: AppColors.ink,
+            inactiveTrackColor: AppColors.line,
+            thumbColor: AppColors.ink,
+            overlayColor: AppColors.ink.withValues(alpha: 0.08),
+            activeTickMarkColor: AppColors.surface,
+            inactiveTickMarkColor: AppColors.muted,
+            showValueIndicator: ShowValueIndicator.never,
+          ),
+          // One node: "Distance, 2 km".
+          child: MergeSemantics(
+            child: Semantics(
+              label: 'Distance',
+              child: Slider(
+                value: _step.toDouble(),
+                max: (distanceSteps.length - 1).toDouble(),
+                divisions: distanceSteps.length - 1,
+                semanticFormatterCallback: (double v) =>
+                    formatDistance(distanceSteps[v.round()]),
+                onChanged: (double v) => onChanged(distanceSteps[v.round()]),
+              ),
+            ),
+          ),
+        ),
+        ExcludeSemantics(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: <Widget>[
+                Text(
+                  formatDistance(distanceSteps.first),
+                  style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                ),
+                Text(
+                  formatDistance(distanceSteps.last),
+                  style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

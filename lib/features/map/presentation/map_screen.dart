@@ -14,6 +14,7 @@ import '../../location/domain/location_repository.dart';
 import '../../location/presentation/location_message.dart';
 import '../../location/presentation/location_providers.dart';
 import '../../places/domain/place.dart';
+import '../../places/domain/place_filters.dart';
 import '../../places/domain/places_repository.dart';
 import '../../places/presentation/filters_button.dart';
 import '../../places/presentation/hours_text.dart';
@@ -133,6 +134,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final EdgeInsets safe = MediaQuery.paddingOf(context);
     final double clearance = AppNavMetrics.clearance(safe.bottom);
     final SearchArea? here = area.value;
+    final PlaceFilters filters = ref.watch(filtersProvider);
     // Without a location, the person can still choose a spot on the map,
     // starting from the middle of the places (docs/decisions.md 003).
     final LocationState? needs = switch (area.error) {
@@ -161,7 +163,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               _target!.latitude,
               _target!.longitude,
             ) >
-            here.radiusMetres;
+            filters.maxDistanceMetres;
     return ColoredBox(
       color: AppColors.background,
       child: Stack(
@@ -172,7 +174,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 MapProps(
                   latitude: latitude,
                   longitude: longitude,
-                  radiusMetres: here?.radiusMetres,
+                  radiusMetres: here == null ? null : filters.maxDistanceMetres,
                   places: here == null ? const <Place>[] : list,
                   selectedId: _hop ?? selected?.id,
                   tilted: _tilted,
@@ -335,7 +337,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   String _count(AsyncValue<List<Place>> places, SearchArea? here) {
     final String within = here == null
         ? ''
-        : ' within ${formatDistance(here.radiusMetres)}';
+        : ' within ${formatDistance(ref.read(filtersProvider).maxDistanceMetres)}';
     return switch (places) {
       AsyncData<List<Place>>(value: final List<Place> l) when l.isEmpty =>
         'No places pass these filters',

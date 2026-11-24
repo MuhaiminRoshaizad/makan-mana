@@ -30,6 +30,35 @@ const SearchArea area = SearchArea(
 );
 
 void main() {
+  test('places further than the distance stay off, and the wheel takes '
+      'only as many as asked for, nearest first', () {
+    final List<Place> all = <Place>[
+      for (int i = 0; i < 30; i++)
+        Place(
+          id: '$i',
+          name: 'Place $i',
+          rating: 4.5,
+          reviewCount: 100,
+          latitude: 0,
+          longitude: 0,
+          distanceMetres: 100 * (i + 1),
+          openNow: true,
+        ),
+    ];
+    const PlaceFilters f = PlaceFilters(maxDistanceMetres: 1000);
+    expect(f.pick(all), hasLength(10));
+    expect(
+      f.copyWith(maxPlaces: () => 5).pick(all).map((Place p) => p.id),
+      <String>['0', '1', '2', '3', '4'],
+    );
+    expect(
+      f.copyWith(maxDistanceMetres: 3000, maxPlaces: () => null).pick(all),
+      hasLength(30),
+    );
+    // The default asks for 20 within 2 km.
+    expect(const PlaceFilters().pick(all), hasLength(20));
+  });
+
   test('demo places sit at their stated distance from the centre', () async {
     const SearchArea area = SearchArea(
       latitude: 3.1478,

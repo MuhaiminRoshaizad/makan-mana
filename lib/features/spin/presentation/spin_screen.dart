@@ -5,13 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/format/formatters.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/status_message.dart';
 import '../../location/domain/location_repository.dart';
 import '../../location/presentation/location_message.dart';
 import '../../location/presentation/location_providers.dart';
 import '../../places/domain/place.dart';
-import '../../places/presentation/area_button.dart';
+import '../../places/domain/place_filters.dart';
 import '../../places/presentation/filters_button.dart';
 import '../../places/presentation/filters_sheet.dart';
 import '../../places/presentation/places_providers.dart';
@@ -82,22 +83,19 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
     final double clearance = AppNavMetrics.clearance(
       MediaQuery.paddingOf(context).bottom,
     );
-    // The search area and Filters share the line under the title while
-    // there is room; with large text Filters moves under the area instead
-    // of squeezing it.
-    final Widget title = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Text('Makan Mana', style: _Type.title(context)),
-        const SizedBox(height: AppSpacing.xs),
-        Wrap(
-          alignment: WrapAlignment.spaceBetween,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: const <Widget>[AreaButton(), FiltersButton()],
-        ),
-      ],
+    // One button for the distance and every filter, since both open the
+    // same sheet. The tab needs no title: the tab bar names it.
+    final PlaceFilters filters = ref.watch(filtersProvider);
+    final String around = ref.watch(pinProvider) != null
+        ? 'your pin'
+        : demoMode
+        ? 'Dataran Merdeka'
+        : 'you';
+    final Widget title = Align(
+      alignment: Alignment.topLeft,
+      child: FiltersButton(
+        label: 'Within ${formatDistance(filters.maxDistanceMetres)} of $around',
+      ),
     );
     return SafeArea(
       bottom: false,
@@ -330,14 +328,6 @@ double _diameter(BuildContext context, BoxConstraints c) {
 }
 
 abstract final class _Type {
-  static TextStyle title(BuildContext context) => const TextStyle(
-    fontSize: 34,
-    height: 1.2,
-    fontWeight: FontWeight.w800,
-    letterSpacing: -0.5,
-    color: AppColors.ink,
-  );
-
   static TextStyle count(BuildContext context) => const TextStyle(
     fontSize: 15,
     fontWeight: FontWeight.w500,

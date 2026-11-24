@@ -50,12 +50,13 @@ void main() {
     WidgetTester tester,
   ) async {
     await openApp(tester);
-    expect(find.text('Makan Mana'), findsOneWidget);
+    // The Spin tab has no title; its Filters button says how far it looks.
+    expect(find.textContaining('Within 2 km'), findsOneWidget);
 
     await tester.tap(find.bySemanticsLabel('Map').last);
     await tester.pumpAndSettle();
     expect(tester.widget<FloatingNav>(find.byType(FloatingNav)).index, 1);
-    expect(find.text('Makan Mana'), findsNothing);
+    expect(find.textContaining('Within 2 km'), findsNothing);
     expect(
       tester.getSemantics(find.bySemanticsLabel('Map').last),
       isSemantics(isSelected: true, isButton: true),
@@ -63,7 +64,7 @@ void main() {
 
     await tester.tap(find.bySemanticsLabel('Spin').last);
     await tester.pumpAndSettle();
-    expect(find.text('Makan Mana'), findsOneWidget);
+    expect(find.textContaining('Within 2 km'), findsOneWidget);
   });
 
   testWidgets('the bar floats above a 48 dp navigation bar, centred', (

@@ -103,11 +103,39 @@ void main() {
     expect(find.text('Show 18 places'), findsOneWidget);
     expect(find.text('on wheel: 15'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('Show 18 places'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Show 18 places'));
     await tester.pumpAndSettle();
     expect(find.text('Minimum rating'), findsNothing);
     expect(find.text('on wheel: 18'), findsOneWidget);
     expect(find.bySemanticsLabel('Filters, 3 in use'), findsOneWidget);
+  });
+
+  testWidgets('distance reads in kilometres, and the place count says how '
+      'many of those that pass go on the wheel', (WidgetTester tester) async {
+    await show(tester);
+    await open(tester);
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('Distance')),
+      isSemantics(
+        label: 'Distance',
+        value: '2 km',
+        increasedValue: '3 km',
+        decreasedValue: '1 km',
+      ),
+    );
+    await tester.drag(find.text('Minimum rating'), const Offset(0, -2000));
+    await tester.pumpAndSettle();
+    // 20 allowed, 15 pass: all of them go on.
+    expect(find.text('All 15 that pass.'), findsOneWidget);
+    await tester.tap(find.text('5'));
+    await tester.pumpAndSettle();
+    expect(find.text('The nearest 5 of the 15 that pass.'), findsOneWidget);
+    expect(find.text('Show 5 places'), findsOneWidget);
+    await tester.tap(find.text('All'));
+    await tester.pumpAndSettle();
+    expect(find.text('All 15 that pass.'), findsOneWidget);
   });
 
   testWidgets('filters nothing passes say so and offer no way to apply', (
@@ -124,7 +152,7 @@ void main() {
       tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
       isNull,
     );
-    expect(find.textContaining('Lower the rating'), findsOneWidget);
+    expect(find.textContaining('lower the rating'), findsOneWidget);
   });
 
   testWidgets('a sheet closed without Show changes nothing', (
@@ -172,7 +200,7 @@ void main() {
     await show(tester, scaler: const _DampedScaler());
     await open(tester);
     expect(tester.takeException(), isNull);
-    await tester.drag(find.text('Minimum rating'), const Offset(0, -600));
+    await tester.drag(find.text('Minimum rating'), const Offset(0, -2000));
     await tester.pumpAndSettle();
     expect(
       tester.getRect(find.text('Show 15 places')).bottom,

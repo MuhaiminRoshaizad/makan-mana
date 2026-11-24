@@ -7,15 +7,22 @@ import 'filters_sheet.dart';
 import 'places_providers.dart';
 
 /// One button for every filter, with a badge counting those in use.
+/// [label] can say what the filters add up to, such as the distance.
 class FiltersButton extends ConsumerWidget {
-  const FiltersButton({super.key});
+  const FiltersButton({super.key, this.label = 'Filters'});
+
+  final String label;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final int active = ref.watch(filtersProvider).activeCount;
     return Semantics(
       button: true,
-      label: active == 0 ? 'Filters' : 'Filters, $active in use',
+      label: <String>[
+        if (label != 'Filters') 'Filters',
+        label,
+        if (active > 0) '$active in use',
+      ].join(', '),
       excludeSemantics: true,
       child: OutlinedButton(
         onPressed: () => showFiltersSheet(context),
@@ -36,7 +43,7 @@ class FiltersButton extends ConsumerWidget {
           children: <Widget>[
             const Icon(CupertinoIcons.slider_horizontal_3, size: 18),
             const SizedBox(width: AppSpacing.sm),
-            const Text('Filters'),
+            Flexible(child: Text(label)),
             if (active > 0) ...<Widget>[
               const SizedBox(width: AppSpacing.sm),
               Container(
