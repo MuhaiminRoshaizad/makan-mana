@@ -3,8 +3,11 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
 
 import '../../../core/theme/app_tokens.dart';
+import '../../location/domain/location_repository.dart';
+import '../../location/presentation/location_providers.dart';
 import '../../places/domain/place.dart';
 import '../../places/presentation/filters_button.dart';
 import '../../places/presentation/filters_sheet.dart';
@@ -22,6 +25,16 @@ class SpinScreen extends ConsumerStatefulWidget {
 }
 
 class _SpinScreenState extends ConsumerState<SpinScreen> {
+  /// Coming back from Settings may have changed the answer: check again
+  /// unless the wheel already knows where it is.
+  late final AppLifecycleListener _lifecycle = AppLifecycleListener(
+    onResume: () {
+      if (ref.read(locationProvider).value is! Located) {
+        ref.read(locationProvider.notifier).recheck();
+      }
+    },
+  );
+
   int? _current;
   bool _spunOnce = false;
   final GlobalKey<SpinWheelState> _wheel = GlobalKey<SpinWheelState>();
@@ -30,7 +43,14 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
   Timer? _result;
 
   @override
+  void initState() {
+    super.initState();
+    _lifecycle;
+  }
+
+  @override
   void dispose() {
+    _lifecycle.dispose();
     _result?.cancel();
     super.dispose();
   }
@@ -241,7 +261,13 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
     );
   }
 
-  Widget _failed(Object error) {
+  Widget _failed(Object raw) {
+    // An error from a provider this one watches arrives wrapped.
+    Object error = raw;
+    while (error is ProviderException) {
+      error = error.exception;
+    }
+    if (error is NeedsLocation) return _location(error.state);
     if (error is PlacesUnavailable) {
       return const _Message(
         title: 'No places in this build',
@@ -257,6 +283,41 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
       action: 'Try again',
       onAction: () => ref.invalidate(nearbyPlacesProvider),
     );
+  }
+
+  /// What to do while there is no position to search round.
+  Widget _location(LocationState state) {
+    final LocationNotifier location = ref.read(locationProvider.notifier);
+    return switch (state) {
+      RefusedForGood() => _Message(
+        title: 'Location is off for Makan Mana',
+        body:
+            'Allow it in Settings, under Location, to find places to eat near '
+            'you.',
+        action: 'Open Settings',
+        onAction: location.ask,
+      ),
+      LocationOff() => _Message(
+        title: 'Location is turned off',
+        body: 'Turn on location to find places to eat near you.',
+        action: 'Turn on location',
+        onAction: location.ask,
+      ),
+      PositionUnavailable() => _Message(
+        title: "Couldn't tell where you are",
+        body: 'Move somewhere with a clearer view of the sky, then try again.',
+        action: 'Try again',
+        onAction: location.recheck,
+      ),
+      _ => _Message(
+        title: 'Find places near you',
+        body:
+            'Makan Mana uses where you are to fill the wheel with places '
+            'nearby. Your location stays on your phone.',
+        action: 'Use my location',
+        onAction: location.ask,
+      ),
+    };
   }
 }
 

@@ -93,7 +93,7 @@ void main() {
           placesRepositoryProvider.overrideWithValue(
             _Counting(() => searches++),
           ),
-          searchAreaProvider.overrideWithValue(area),
+          searchAreaProvider.overrideWith((_) async => area),
         ],
       );
       addTearDown(c.dispose);

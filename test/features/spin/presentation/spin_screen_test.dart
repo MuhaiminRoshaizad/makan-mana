@@ -5,6 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:makan_mana/core/theme/app_theme.dart';
+import 'package:makan_mana/features/location/domain/location_repository.dart';
+import 'package:makan_mana/features/location/presentation/location_providers.dart';
+import 'package:makan_mana/features/places/data/bundled_places_repository.dart';
 import 'package:makan_mana/features/places/data/demo_places_repository.dart';
 import 'package:makan_mana/features/places/domain/place.dart';
 import 'package:makan_mana/features/places/domain/place_filters.dart';
@@ -38,6 +41,40 @@ class _Repo implements PlacesRepository {
   }
 }
 
+/// A phone whose location is [state]; asking moves it to [afterAsk].
+class _Location implements LocationRepository {
+  _Location(this.state, {this.afterAsk});
+  LocationState state;
+  final LocationState? afterAsk;
+  int asks = 0;
+  int appSettings = 0;
+  int locationSettings = 0;
+
+  @override
+  Future<LocationState> current() async => state;
+
+  @override
+  Future<LocationState> ask() async {
+    asks++;
+    return state = afterAsk ?? state;
+  }
+
+  @override
+  Future<void> openAppSettings() async => appSettings++;
+
+  @override
+  Future<void> openLocationSettings() async => locationSettings++;
+}
+
+/// A build with no places file in it.
+class _NoFile implements PlacesRepository {
+  @override
+  bool get knowsOpeningHours => true;
+
+  @override
+  Future<List<Place>> nearby(SearchArea a) => throw const NoBundledPlaces();
+}
+
 /// Android 14 and later scale small text by the full factor but damp large
 /// sizes, which a linear scaler cannot reproduce.
 class _DampedScaler extends TextScaler {
@@ -65,7 +102,7 @@ void main() {
     WidgetTester tester, {
     PlacesRepository? repo,
     PlaceFilters? filters,
-    bool demo = true,
+    _Location? location,
     TextScaler scaler = TextScaler.noScaling,
     Size size = const Size(412, 915),
     EdgeInsets padding = const EdgeInsets.only(top: 24, bottom: 48),
@@ -75,10 +112,12 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          if (demo) ...[
-            placesRepositoryProvider.overrideWithValue(repo ?? _Repo()),
-            searchAreaProvider.overrideWithValue(area),
-          ],
+          placesRepositoryProvider.overrideWithValue(repo ?? _Repo()),
+          // With a fake phone, the area comes from its location.
+          if (location != null)
+            locationRepositoryProvider.overrideWithValue(location)
+          else
+            searchAreaProvider.overrideWith((_) async => area),
           if (filters != null)
             filtersProvider.overrideWithBuild((_, _) => filters),
         ],
@@ -163,12 +202,81 @@ void main() {
     expect(find.byType(SpinWheel), findsOneWidget);
   });
 
-  testWidgets('outside the demo build it says finding places is not set up, '
-      'rather than inventing any', (WidgetTester tester) async {
-    await show(tester, demo: false);
+  testWidgets('a build with no places file says so, rather than inventing '
+      'any', (WidgetTester tester) async {
+    await show(tester, repo: _NoFile());
     await loaded(tester);
     expect(find.text('No places in this build'), findsOneWidget);
     expect(find.byType(SpinWheel), findsNothing);
+  });
+
+  group('location', () {
+    testWidgets('nothing is asked at launch; Use my location asks, and the '
+        'wheel fills once it is shared', (WidgetTester tester) async {
+      final _Location phone = _Location(
+        const CanAsk(),
+        afterAsk: const Located(3.1478, 101.6953),
+      );
+      await show(tester, location: phone);
+      await loaded(tester);
+      expect(phone.asks, 0);
+      expect(find.text('Find places near you'), findsOneWidget);
+      await tester.tap(find.text('Use my location'));
+      await loaded(tester);
+      expect(phone.asks, 1);
+      expect(find.byType(SpinWheel), findsOneWidget);
+    });
+
+    testWidgets('refused once, it can still ask; refused again stays on the '
+        'card', (WidgetTester tester) async {
+      final _Location phone = _Location(const CanAsk());
+      await show(tester, location: phone);
+      await loaded(tester);
+      await tester.tap(find.text('Use my location'));
+      await loaded(tester);
+      expect(phone.asks, 1);
+      expect(find.text('Find places near you'), findsOneWidget);
+    });
+
+    testWidgets('refused for good, the button opens Settings', (
+      WidgetTester tester,
+    ) async {
+      final _Location phone = _Location(const RefusedForGood());
+      await show(tester, location: phone);
+      await loaded(tester);
+      expect(find.text('Location is off for Makan Mana'), findsOneWidget);
+      await tester.tap(find.text('Open Settings'));
+      await loaded(tester);
+      expect(phone.appSettings, 1);
+      expect(phone.asks, 0);
+    });
+
+    testWidgets('location switched off opens the location settings, and '
+        'coming back with it on fills the wheel', (WidgetTester tester) async {
+      final _Location phone = _Location(const LocationOff());
+      await show(tester, location: phone);
+      await loaded(tester);
+      expect(find.text('Location is turned off'), findsOneWidget);
+      await tester.tap(find.text('Turn on location'));
+      await loaded(tester);
+      expect(phone.locationSettings, 1);
+      phone.state = const Located(3.1478, 101.6953);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await loaded(tester);
+      expect(find.byType(SpinWheel), findsOneWidget);
+    });
+
+    testWidgets('no position offers to try again', (WidgetTester tester) async {
+      final _Location phone = _Location(const PositionUnavailable());
+      await show(tester, location: phone);
+      await loaded(tester);
+      expect(find.text("Couldn't tell where you are"), findsOneWidget);
+      phone.state = const Located(3.1478, 101.6953);
+      await tester.tap(find.text('Try again'));
+      await loaded(tester);
+      expect(find.byType(SpinWheel), findsOneWidget);
+    });
   });
 
   testWidgets('large system text fits, and the wheel ends above the '

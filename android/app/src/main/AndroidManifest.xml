@@ -1,8 +1,18 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Where you are, to find places to eat nearby; only while the app is
+         open. Coarse is listed too, so Android 12+ can offer "approximate". -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <application
         android:label="Makan Mana"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- geolocator's background location service: the app reads one
+             position at a time while open, so it is not needed. -->
+        <service
+            android:name="com.baseflow.geolocator.GeolocatorLocationService"
+            tools:node="remove" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -51,8 +51,9 @@ void main() {
           placesRepositoryProvider.overrideWithValue(
             const DemoPlacesRepository(delay: Duration.zero),
           ),
-          searchAreaProvider.overrideWithValue(
-            const SearchArea(latitude: 0, longitude: 0, radiusMetres: 2000),
+          searchAreaProvider.overrideWith(
+            (_) async =>
+                const SearchArea(latitude: 0, longitude: 0, radiusMetres: 2000),
           ),
         ],
         child: MaterialApp(
@@ -185,8 +186,9 @@ void main() {
       ProviderScope(
         overrides: [
           placesRepositoryProvider.overrideWithValue(_NoHours()),
-          searchAreaProvider.overrideWithValue(
-            const SearchArea(latitude: 0, longitude: 0, radiusMetres: 2000),
+          searchAreaProvider.overrideWith(
+            (_) async =>
+                const SearchArea(latitude: 0, longitude: 0, radiusMetres: 2000),
           ),
         ],
         child: MaterialApp(

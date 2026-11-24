@@ -143,7 +143,7 @@ void main() {
               ]),
             ),
           ),
-          searchAreaProvider.overrideWithValue(area),
+          searchAreaProvider.overrideWith((_) async => area),
         ],
       );
       addTearDown(c.dispose);
@@ -158,13 +158,4 @@ void main() {
       expect(wheel.last.id, 'p19');
     },
   );
-
-  test('a centre reads as latitude then longitude, and nonsense as none', () {
-    expect(parseCentre('3.14,101.69'), <double>[3.14, 101.69]);
-    expect(parseCentre(' 3.14 , 101.69 '), <double>[3.14, 101.69]);
-    expect(parseCentre(''), isNull);
-    expect(parseCentre('3.14'), isNull);
-    expect(parseCentre('95,100'), isNull);
-    expect(parseCentre('a,b'), isNull);
-  });
 }

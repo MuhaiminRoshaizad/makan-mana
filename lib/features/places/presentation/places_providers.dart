@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../location/domain/location_repository.dart';
+import '../../location/presentation/location_providers.dart';
 import '../data/bundled_places_repository.dart';
 import '../data/demo_places_repository.dart';
 import '../domain/place.dart';
@@ -37,7 +39,7 @@ final Provider<DateTime Function()> clockProvider =
 const int wheelMaxPlaces = 20;
 
 /// Raised while the app has no way to find places: the source has nothing
-/// in this build, or there is no centre to search round yet.
+/// in this build.
 class PlacesUnavailable implements Exception {
   const PlacesUnavailable();
 }
@@ -50,43 +52,47 @@ final Provider<PlacesRepository> placesRepositoryProvider =
       },
     );
 
-/// Where to search. The demo searches 2 km round Dataran Merdeka. Until the
-/// app reads the phone's location, other builds search round a centre given
-/// as `--dart-define=MAKAN_MANA_CENTRE=<lat>,<lon>`, kept in a private
-/// defines file; without one there is nowhere to search.
-final Provider<SearchArea?> searchAreaProvider = Provider<SearchArea?>((
-  Ref ref,
-) {
-  if (demoMode) {
-    return const SearchArea(
-      latitude: 3.1478,
-      longitude: 101.6953,
-      radiusMetres: 2000,
-    );
-  }
-  final List<double>? centre = parseCentre(
-    const String.fromEnvironment('MAKAN_MANA_CENTRE'),
-  );
-  if (centre == null) return null;
-  return SearchArea(
-    latitude: centre[0],
-    longitude: centre[1],
-    radiusMetres: 2000,
-  );
-});
-
-/// "5.5,100.4" as [5.5, 100.4]; null when it is not a latitude and a
-/// longitude.
-List<double>? parseCentre(String text) {
-  final List<String> parts = text.split(',');
-  if (parts.length != 2) return null;
-  final double? lat = double.tryParse(parts[0].trim());
-  final double? lon = double.tryParse(parts[1].trim());
-  if (lat == null || lon == null || lat.abs() > 90 || lon.abs() > 180) {
-    return null;
-  }
-  return <double>[lat, lon];
+/// Raised while the search has no centre: location is not shared, is off,
+/// or gave no position. [state] says which.
+class NeedsLocation implements Exception {
+  const NeedsLocation(this.state);
+  final LocationState state;
 }
+
+/// How far round the centre to search, in metres; the search area sheet
+/// changes it.
+final NotifierProvider<RadiusNotifier, int> radiusProvider =
+    NotifierProvider<RadiusNotifier, int>(RadiusNotifier.new);
+
+class RadiusNotifier extends Notifier<int> {
+  @override
+  int build() => 2000;
+
+  void set(int metres) => state = metres;
+}
+
+/// Where to search: round the phone's location, or in the demo round
+/// Dataran Merdeka.
+final FutureProvider<SearchArea> searchAreaProvider =
+    FutureProvider<SearchArea>((Ref ref) async {
+      final int radius = ref.watch(radiusProvider);
+      if (demoMode) {
+        return SearchArea(
+          latitude: 3.1478,
+          longitude: 101.6953,
+          radiusMetres: radius,
+        );
+      }
+      final LocationState here = await ref.watch(locationProvider.future);
+      if (here is Located) {
+        return SearchArea(
+          latitude: here.latitude,
+          longitude: here.longitude,
+          radiusMetres: radius,
+        );
+      }
+      throw NeedsLocation(here);
+    }, retry: (_, _) => null);
 
 final NotifierProvider<FiltersNotifier, PlaceFilters> filtersProvider =
     NotifierProvider<FiltersNotifier, PlaceFilters>(FiltersNotifier.new);
@@ -110,8 +116,7 @@ class FiltersNotifier extends Notifier<PlaceFilters> {
 final FutureProvider<List<Place>> nearbyPlacesProvider =
     FutureProvider<List<Place>>((Ref ref) async {
       final PlacesRepository repo = ref.watch(placesRepositoryProvider);
-      final SearchArea? area = ref.watch(searchAreaProvider);
-      if (area == null) throw const PlacesUnavailable();
+      final SearchArea area = await ref.watch(searchAreaProvider.future);
       try {
         return await repo.nearby(area);
       } on NoBundledPlaces {
