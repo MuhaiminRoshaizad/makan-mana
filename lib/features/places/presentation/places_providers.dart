@@ -6,6 +6,7 @@ import '../../location/presentation/location_providers.dart';
 import '../data/bundled_places_repository.dart';
 import '../data/demo_places_repository.dart';
 import '../domain/place.dart';
+import '../domain/filters_store.dart';
 import '../domain/place_filters.dart';
 import '../domain/places_repository.dart';
 
@@ -122,6 +123,12 @@ final FutureProvider<SearchArea> searchAreaProvider =
       throw NeedsLocation(here);
     }, retry: (_, _) => null);
 
+/// Where the filters are kept between launches. The app opens it in main;
+/// tests get one that counts as already chosen, so screens show places.
+final Provider<FiltersStore> filtersStoreProvider = Provider<FiltersStore>(
+  (Ref ref) => MemoryFiltersStore(chosen: true),
+);
+
 final NotifierProvider<FiltersNotifier, PlaceFilters> filtersProvider =
     NotifierProvider<FiltersNotifier, PlaceFilters>(FiltersNotifier.new);
 
@@ -133,9 +140,26 @@ class FiltersNotifier extends Notifier<PlaceFilters> {
   );
 
   @override
-  PlaceFilters build() => defaults;
+  PlaceFilters build() => ref.read(filtersStoreProvider).load() ?? defaults;
 
-  void set(PlaceFilters filters) => state = filters;
+  /// Applies [filters] and keeps them for next time.
+  void set(PlaceFilters filters) {
+    state = filters;
+    ref.read(filtersStoreProvider).save(filters);
+    ref.read(filtersChosenProvider.notifier).mark();
+  }
+}
+
+/// Whether the filters have been chosen yet. Until they are, the wheel is
+/// empty and asks what the person is after (docs/decisions.md 019).
+final NotifierProvider<FiltersChosenNotifier, bool> filtersChosenProvider =
+    NotifierProvider<FiltersChosenNotifier, bool>(FiltersChosenNotifier.new);
+
+class FiltersChosenNotifier extends Notifier<bool> {
+  @override
+  bool build() => ref.read(filtersStoreProvider).chosen;
+
+  void mark() => state = true;
 }
 
 /// Every place found in the search area, before filtering. A failed search

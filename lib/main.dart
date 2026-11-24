@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app/app.dart';
+import 'features/places/data/prefs_filters_store.dart';
+import 'features/places/presentation/places_providers.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Draw behind the status and navigation bars; screens handle the insets.
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -18,5 +21,16 @@ void main() {
       systemNavigationBarContrastEnforced: false,
     ),
   );
-  runApp(const ProviderScope(child: MakanManaApp()));
+  final SharedPreferencesWithCache prefs =
+      await SharedPreferencesWithCache.create(
+        cacheOptions: PrefsFiltersStore.options,
+      );
+  runApp(
+    ProviderScope(
+      overrides: [
+        filtersStoreProvider.overrideWithValue(PrefsFiltersStore(prefs)),
+      ],
+      child: const MakanManaApp(),
+    ),
+  );
 }

@@ -86,6 +86,7 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
     // One button for the distance and every filter, since both open the
     // same sheet. The tab needs no title: the tab bar names it.
     final PlaceFilters filters = ref.watch(filtersProvider);
+    final bool chosen = ref.watch(filtersChosenProvider);
     final String around = ref.watch(pinProvider) != null
         ? 'your pin'
         : demoMode
@@ -111,6 +112,21 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
             // On its side the phone is too short for the text above the
             // wheel, so the two sit side by side (docs/decisions.md 016).
             final bool wide = c.maxWidth > c.maxHeight;
+            // Until the filters are chosen the wheel waits, empty.
+            if (!chosen && places is AsyncData<List<Place>>) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  title,
+                  Expanded(
+                    child: _ChooseFirst(
+                      wide: wide,
+                      onChoose: () => showFiltersSheet(context),
+                    ),
+                  ),
+                ],
+              );
+            }
             if (places case AsyncData<List<Place>>(
               value: final List<Place> list,
             ) when list.isNotEmpty) {
@@ -130,8 +146,8 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
                     AsyncData<List<Place>>() => StatusMessage(
                       title: 'Nothing nearby passes these filters',
                       body:
-                          'Lower the rating or the number of reviews to bring '
-                          'some places back.',
+                          'Go further, or lower the rating or the number of '
+                          'reviews, to bring some places back.',
                       action: 'Edit filters',
                       onAction: () => showFiltersSheet(context),
                     ),
@@ -476,3 +492,157 @@ class _Bone extends StatelessWidget {
 
 /// A centred title, a line of help and an optional action, for when there
 /// is no wheel to show.
+
+/// The wheel before the filters are first chosen: blank, asking what the
+/// person is after.
+class _ChooseFirst extends StatelessWidget {
+  const _ChooseFirst({required this.wide, required this.onChoose});
+
+  final bool wide;
+  final VoidCallback onChoose;
+
+  @override
+  Widget build(BuildContext context) {
+    const Widget copy = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Text(
+          'What are you after today?',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 20,
+            height: 1.25,
+            fontWeight: FontWeight.w800,
+            color: AppColors.ink,
+          ),
+        ),
+        SizedBox(height: AppSpacing.sm),
+        Text(
+          'Choose how far to go and how good it should be, and the wheel '
+          'fills with places that fit.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 15, height: 1.45, color: AppColors.muted),
+        ),
+      ],
+    );
+    final Widget action = FilledButton(
+      onPressed: onChoose,
+      child: const Text('Choose'),
+    );
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints c) {
+        if (wide) {
+          final double d = math.min(c.maxHeight, c.maxWidth * 0.45);
+          return Row(
+            children: <Widget>[
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      copy,
+                      const SizedBox(height: AppSpacing.xl),
+                      action,
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xl),
+              _BlankWheel(diameter: d),
+            ],
+          );
+        }
+        final double d = math.min(c.maxWidth, c.maxHeight * 0.5);
+        return SingleChildScrollView(
+          child: Column(
+            children: <Widget>[
+              const SizedBox(height: AppSpacing.xxl),
+              _BlankWheel(diameter: d),
+              const SizedBox(height: AppSpacing.xxl),
+              copy,
+              const SizedBox(height: AppSpacing.xl),
+              action,
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// A wheel with no places yet: a dashed rim, faint spokes and a grey hub.
+class _BlankWheel extends StatelessWidget {
+  const _BlankWheel({required this.diameter});
+  final double diameter;
+
+  @override
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: SizedBox.square(
+      dimension: diameter,
+      child: CustomPaint(
+        painter: const _BlankWheelPainter(),
+        child: Center(
+          child: Container(
+            width: diameter * 0.25,
+            height: diameter * 0.25,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.fill,
+              border: Border.all(color: AppColors.surface, width: 5),
+            ),
+            child: const Text(
+              'Spin',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: AppColors.muted,
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _BlankWheelPainter extends CustomPainter {
+  const _BlankWheelPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Offset c = size.center(Offset.zero);
+    final double r = size.shortestSide / 2 - 2;
+    canvas.drawCircle(c, r, Paint()..color = AppColors.fill);
+    final Paint spoke = Paint()
+      ..color = AppColors.line
+      ..strokeWidth = 1.5;
+    for (int i = 0; i < 8; i++) {
+      final double a = i * math.pi / 4;
+      canvas.drawLine(
+        c + Offset(math.cos(a), math.sin(a)) * r * 0.16,
+        c + Offset(math.cos(a), math.sin(a)) * (r - 6),
+        spoke,
+      );
+    }
+    // A dashed rim: the wheel is there, waiting to be filled.
+    final Paint dash = Paint()
+      ..color = AppColors.handle
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
+    const int dashes = 48;
+    for (int i = 0; i < dashes; i++) {
+      final double a = i * 2 * math.pi / dashes;
+      canvas.drawArc(
+        Rect.fromCircle(center: c, radius: r),
+        a,
+        math.pi / dashes,
+        false,
+        dash,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_BlankWheelPainter old) => false;
+}

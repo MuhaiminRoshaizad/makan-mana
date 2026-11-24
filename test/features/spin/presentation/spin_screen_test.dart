@@ -9,6 +9,7 @@ import 'package:makan_mana/features/location/domain/location_repository.dart';
 import 'package:makan_mana/features/location/presentation/location_providers.dart';
 import 'package:makan_mana/features/places/data/bundled_places_repository.dart';
 import 'package:makan_mana/features/places/data/demo_places_repository.dart';
+import 'package:makan_mana/features/places/domain/filters_store.dart';
 import 'package:makan_mana/features/places/domain/place.dart';
 import 'package:makan_mana/features/places/domain/place_filters.dart';
 import 'package:makan_mana/features/places/domain/places_repository.dart';
@@ -109,6 +110,7 @@ void main() {
     PlacesRepository? repo,
     PlaceFilters? filters,
     _Location? location,
+    FiltersStore? store,
     TextScaler scaler = TextScaler.noScaling,
     Size size = const Size(412, 915),
     EdgeInsets padding = const EdgeInsets.only(top: 24, bottom: 48),
@@ -126,6 +128,7 @@ void main() {
             searchAreaProvider.overrideWith((_) async => area),
           if (filters != null)
             filtersProvider.overrideWithBuild((_, _) => filters),
+          if (store != null) filtersStoreProvider.overrideWithValue(store),
         ],
         child: MaterialApp(
           theme: buildAppTheme(),
@@ -398,6 +401,60 @@ void main() {
       expect(bone.left, closeTo(wheel.left, 0.5));
       expect(bone.bottom, closeTo(wheel.bottom, 0.5));
       expect(bone.width, closeTo(wheel.width, 0.5));
+    });
+  });
+
+  group('before the filters are first chosen', () {
+    testWidgets('the wheel is blank and asks what you are after; choosing '
+        'fills it and keeps the choice', (WidgetTester tester) async {
+      final MemoryFiltersStore store = MemoryFiltersStore();
+      await show(tester, store: store);
+      await loaded(tester);
+      expect(find.text('What are you after today?'), findsOneWidget);
+      expect(find.byType(SpinWheel), findsNothing);
+      await tester.tap(find.text('Choose'));
+      await tester.pumpAndSettle();
+      await tester.drag(find.text('Minimum rating'), const Offset(0, -2000));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Show 15 places'));
+      await tester.pumpAndSettle();
+      expect(find.byType(SpinWheel), findsOneWidget);
+      expect(store.chosen, isTrue);
+      expect(store.saved, const PlaceFilters());
+    });
+
+    testWidgets('kept filters are used at once on the next launch', (
+      WidgetTester tester,
+    ) async {
+      await show(
+        tester,
+        store: MemoryFiltersStore(
+          chosen: true,
+          saved: const PlaceFilters(maxPlaces: 5),
+        ),
+      );
+      await loaded(tester);
+      expect(find.text('5 places on the wheel'), findsOneWidget);
+    });
+
+    testWidgets('the blank wheel fits with large text, upright and on its '
+        'side', (WidgetTester tester) async {
+      await show(
+        tester,
+        store: MemoryFiltersStore(),
+        scaler: const _DampedScaler(),
+      );
+      await loaded(tester);
+      expect(tester.takeException(), isNull);
+      await show(
+        tester,
+        store: MemoryFiltersStore(),
+        size: const Size(915, 412),
+        padding: const EdgeInsets.only(left: 48),
+      );
+      await loaded(tester);
+      expect(tester.takeException(), isNull);
+      expect(find.text('Choose'), findsOneWidget);
     });
   });
 }

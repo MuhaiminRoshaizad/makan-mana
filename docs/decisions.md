@@ -247,3 +247,21 @@ style URL changes to another vector tile host.
 3D buildings appear only from zoom 14, closer than a 2 km circle fits. The
 Android build needs JDK 21, and iOS needs 15.5 or later. The map's own
 attribution button must stay visible (OpenStreetMap's licence).
+
+## 019: The wheel starts empty, and filters are kept
+
+**Decided:** the first time the app opens, the wheel is blank and asks what
+the person is after. Filters hold everything chosen there: distance (500 m
+to 15 km), kind of place, rating, reviews, open now and how many places go
+on the wheel (5, 10, 20 or all, nearest first). Once chosen they are kept on
+the phone with shared_preferences and used straight away on later launches.
+The app always looks 15 km out; Distance narrows that, so the number of
+matches is right at any distance without searching again.
+
+**Why:** the user wanted to set the distance and the rest before the wheel
+filled, rather than find defaults already applied. Keeping the choice means
+asking once, not every lunch.
+
+**Costs:** a first lunch takes one more step. Holding every place within
+15 km is cheap for the bundled list; a live source such as Google Places,
+which returns 20 at a time, would need its own way to count matches.
