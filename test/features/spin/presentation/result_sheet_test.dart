@@ -14,6 +14,8 @@ const Place mamak = Place(
   name: 'Restoran Mamak',
   rating: 4.0,
   reviewCount: 5420,
+  latitude: 0,
+  longitude: 0,
   distanceMetres: 1200,
   openNow: true,
 );
@@ -112,6 +114,8 @@ void main() {
         name: 'Gerai Baru',
         rating: null,
         reviewCount: 0,
+        latitude: 0,
+        longitude: 0,
         distanceMetres: 80,
         openNow: true,
       ),
@@ -141,6 +145,8 @@ void main() {
       name: 'Warung Soto',
       rating: 4.2,
       reviewCount: 288,
+      latitude: 0,
+      longitude: 0,
       distanceMetres: 1400,
       openNow: true,
     );
@@ -185,6 +191,8 @@ void main() {
     name: 'Kafe Bertam',
     rating: 4.5,
     reviewCount: 446,
+    latitude: 0,
+    longitude: 0,
     distanceMetres: 300,
     openNow: true,
     hours: const OpeningHours(<List<(int, int)>>[

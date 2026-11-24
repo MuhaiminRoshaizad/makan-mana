@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import '../domain/place.dart';
 import '../domain/places_repository.dart';
 
@@ -17,27 +19,39 @@ class DemoPlacesRepository implements PlacesRepository {
   Future<List<Place>> nearby(SearchArea area) async {
     await Future<void>.delayed(delay);
     final List<Place> all = <Place>[
-      for (final (
-            String name,
-            double rating,
-            int reviews,
-            int metres,
-            bool open,
-          )
-          in _places)
-        Place(
-          id: 'demo-${name.toLowerCase().replaceAll(' ', '-')}',
-          name: name,
-          rating: rating,
-          reviewCount: reviews,
-          distanceMetres: metres,
-          openNow: open,
-        ),
+      for (final (int i, (String, double, int, int, bool) p) in _places.indexed)
+        _place(area, i, p),
     ]..sort((Place a, Place b) => a.distanceMetres - b.distanceMetres);
     return <Place>[
       for (final Place p in all)
         if (p.distanceMetres <= area.radiusMetres) p,
     ];
+  }
+
+  /// Spreads the places round the centre at their stated distances, each a
+  /// golden angle on from the last so none line up.
+  static Place _place(
+    SearchArea area,
+    int i,
+    (String, double, int, int, bool) p,
+  ) {
+    final (String name, double rating, int reviews, int metres, bool open) = p;
+    final double bearing = i * 137.5 * math.pi / 180;
+    const double metresPerDegree = 111320;
+    return Place(
+      id: 'demo-${name.toLowerCase().replaceAll(' ', '-')}',
+      name: name,
+      rating: rating,
+      reviewCount: reviews,
+      latitude: area.latitude + metres * math.cos(bearing) / metresPerDegree,
+      longitude:
+          area.longitude +
+          metres *
+              math.sin(bearing) /
+              (metresPerDegree * math.cos(area.latitude * math.pi / 180)),
+      distanceMetres: metres,
+      openNow: open,
+    );
   }
 
   static const List<(String, double, int, int, bool)> _places =

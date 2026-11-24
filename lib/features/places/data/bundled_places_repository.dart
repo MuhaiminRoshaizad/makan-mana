@@ -55,6 +55,8 @@ class BundledPlacesRepository implements PlacesRepository {
           name: e.name,
           rating: e.rating,
           reviewCount: e.reviews,
+          latitude: e.lat,
+          longitude: e.lon,
           distanceMetres: metres,
           openNow: e.hours?.isOpenAt(now),
           category: e.category,

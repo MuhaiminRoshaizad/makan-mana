@@ -8,6 +8,8 @@ class Place {
     required this.name,
     required this.rating,
     required this.reviewCount,
+    required this.latitude,
+    required this.longitude,
     required this.distanceMetres,
     required this.openNow,
     this.category,
@@ -22,6 +24,10 @@ class Place {
   /// Google's average rating out of 5, or null when nobody has rated it.
   final double? rating;
   final int reviewCount;
+
+  /// Where it is, for the map.
+  final double latitude;
+  final double longitude;
 
   /// Straight-line distance from the search centre.
   final int distanceMetres;

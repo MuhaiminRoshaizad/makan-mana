@@ -17,6 +17,8 @@ Place place({
   name: 'x',
   rating: rating,
   reviewCount: reviews,
+  latitude: 0,
+  longitude: 0,
   distanceMetres: metres,
   openNow: open,
 );
@@ -28,6 +30,26 @@ const SearchArea area = SearchArea(
 );
 
 void main() {
+  test('demo places sit at their stated distance from the centre', () async {
+    const SearchArea area = SearchArea(
+      latitude: 3.1478,
+      longitude: 101.6953,
+      radiusMetres: 2000,
+    );
+    final List<Place> places = await const DemoPlacesRepository(
+      delay: Duration.zero,
+    ).nearby(area);
+    for (final Place p in places) {
+      final double measured = distanceMetres(
+        area.latitude,
+        area.longitude,
+        p.latitude,
+        p.longitude,
+      );
+      expect(measured, closeTo(p.distanceMetres, p.distanceMetres * 0.01));
+    }
+  });
+
   group('the default filters (4.0 and up, 20 reviews, open now)', () {
     const PlaceFilters f = PlaceFilters();
 

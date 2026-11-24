@@ -8,6 +8,8 @@ Place p(String name, [String? type]) => Place(
   name: name,
   rating: 4.2,
   reviewCount: 100,
+  latitude: 0,
+  longitude: 0,
   distanceMetres: 300,
   openNow: true,
   category: type,
