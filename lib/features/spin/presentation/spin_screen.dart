@@ -3,7 +3,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_riverpod/misc.dart' show ProviderException;
 
 import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/status_message.dart';
@@ -267,11 +266,7 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
   }
 
   Widget _failed(Object raw) {
-    // An error from a provider this one watches arrives wrapped.
-    Object error = raw;
-    while (error is ProviderException) {
-      error = error.exception;
-    }
+    final Object error = rootCause(raw);
     if (error is NeedsLocation) return LocationMessage(error.state);
     if (error is PlacesUnavailable) {
       return const StatusMessage(

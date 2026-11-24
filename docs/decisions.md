@@ -227,3 +227,23 @@ Google shows a visitor who is not signed in; the rest are a link away. Places no
 Open now keeps them rather than empty the wheel while the list fills in. A
 new list means a new build, and a build made elsewhere, such as on CI, has no
 places at all.
+
+## 018: The map is MapLibre with OpenFreeMap tiles
+
+**Decided:** the Map tab draws with `maplibre_gl` and OpenFreeMap's Liberty
+style, tilted back to show buildings in 3D. Pins are the places on the
+wheel, each in its wedge's colour and labelled with its name, inside a ring
+for the search area. Liberty's own restaurant icons are hidden so they do
+not compete with the pins.
+
+**Why:** the Google Maps SDK needs the same billing account as Places (017).
+OpenFreeMap needs no key and no account, and MapLibre is the open engine
+that draws its vector tiles, 3D buildings included, on Android, iOS and the
+web.
+
+**Costs:** OpenFreeMap is one developer's project, paid for by donations,
+and offers no SLA (openfreemap.org, checked 24/11/2026); if it stops, the
+style URL changes to another vector tile host.
+3D buildings appear only from zoom 14, closer than a 2 km circle fits. The
+Android build needs JDK 21, and iOS needs 15.5 or later. The map's own
+attribution button must stay visible (OpenStreetMap's licence).

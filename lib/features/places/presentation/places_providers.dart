@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderException;
 
 import '../../location/domain/location_repository.dart';
 import '../../location/presentation/location_providers.dart';
@@ -51,6 +52,16 @@ final Provider<PlacesRepository> placesRepositoryProvider =
         PlacesSource.bundled => BundledPlacesRepository(),
       },
     );
+
+/// The error behind [error]: one from a provider that another watches
+/// arrives wrapped, once for each provider it passed through.
+Object rootCause(Object error) {
+  Object e = error;
+  while (e is ProviderException) {
+    e = e.exception;
+  }
+  return e;
+}
 
 /// Raised while the search has no centre: location is not shared, is off,
 /// or gave no position. [state] says which.
