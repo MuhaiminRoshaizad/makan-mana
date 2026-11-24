@@ -86,7 +86,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await show(tester);
-    expect(find.bySemanticsLabel('Filters, 3 in use'), findsOneWidget);
+    expect(find.bySemanticsLabel('Filters, 4 in use'), findsOneWidget);
     expect(find.text('on wheel: 15'), findsOneWidget);
   });
 
@@ -106,7 +106,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Minimum rating'), findsNothing);
     expect(find.text('on wheel: 18'), findsOneWidget);
-    expect(find.bySemanticsLabel('Filters, 2 in use'), findsOneWidget);
+    expect(find.bySemanticsLabel('Filters, 3 in use'), findsOneWidget);
   });
 
   testWidgets('filters nothing passes say so and offer no way to apply', (
@@ -137,7 +137,7 @@ void main() {
     await tester.tapAt(const Offset(200, 20));
     await tester.pumpAndSettle();
     expect(find.text('on wheel: 15'), findsOneWidget);
-    expect(find.bySemanticsLabel('Filters, 3 in use'), findsOneWidget);
+    expect(find.bySemanticsLabel('Filters, 4 in use'), findsOneWidget);
   });
 
   testWidgets('Reset is off at the defaults and brings them back', (
@@ -197,12 +197,45 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 50));
     // Rating and reviews only: two filters in use.
-    expect(find.bySemanticsLabel('Filters, 2 in use'), findsOneWidget);
+    expect(find.bySemanticsLabel('Filters, 3 in use'), findsOneWidget);
     await tester.tap(find.byType(FiltersButton));
     await tester.pumpAndSettle();
     expect(find.text('Minimum rating'), findsOneWidget);
     expect(find.text('Open now'), findsNothing);
     expect(find.byType(CupertinoSwitch), findsNothing);
+  });
+
+  testWidgets('kinds of place toggle on and off, but the last one stays on', (
+    WidgetTester tester,
+  ) async {
+    await show(tester);
+    await open(tester);
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('Kedai makan')),
+      isSemantics(isToggled: true),
+    );
+    // Kedai makan is the only kind on, so tapping it does nothing.
+    await tester.tap(find.bySemanticsLabel('Kedai makan'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('Kedai makan')),
+      isSemantics(isToggled: true),
+    );
+    await tester.tap(find.bySemanticsLabel('Fast food & chains'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('Fast food & chains')),
+      isSemantics(isToggled: true),
+    );
+    // With two on, kedai makan can now be switched off.
+    await tester.tap(find.bySemanticsLabel('Kedai makan'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('Kedai makan')),
+      isSemantics(isToggled: false),
+    );
+    // The demo's places are all kedai makan, so nothing is left.
+    expect(find.text('No matches'), findsOneWidget);
   });
 }
 

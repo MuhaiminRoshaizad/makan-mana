@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:makan_mana/features/places/data/demo_places_repository.dart';
 import 'package:makan_mana/features/places/domain/place.dart';
 import 'package:makan_mana/features/places/domain/place_filters.dart';
+import 'package:makan_mana/features/places/domain/place_kind.dart';
 import 'package:makan_mana/features/places/domain/places_repository.dart';
 import 'package:makan_mana/features/places/presentation/places_providers.dart';
 
@@ -125,17 +126,21 @@ void main() {
     expect(sub.read().hasError, isTrue);
   });
 
-  test('the defaults count as three filters, and Any as none', () {
-    expect(const PlaceFilters().activeCount, 3);
-    expect(
-      const PlaceFilters(
-        minRating: null,
-        minReviews: 0,
-        openNow: false,
-      ).activeCount,
-      0,
-    );
-  });
+  test(
+    'the defaults count as four filters, and Any with every kind as none',
+    () {
+      expect(const PlaceFilters().activeCount, 4);
+      expect(
+        PlaceFilters(
+          minRating: null,
+          minReviews: 0,
+          openNow: false,
+          kinds: PlaceKind.values.toSet(),
+        ).activeCount,
+        0,
+      );
+    },
+  );
 
   test('filters equal by value, and copyWith can clear the rating', () {
     expect(const PlaceFilters(), const PlaceFilters());

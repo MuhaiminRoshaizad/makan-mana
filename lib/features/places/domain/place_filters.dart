@@ -1,4 +1,5 @@
 import 'place.dart';
+import 'place_kind.dart';
 
 /// Which nearby places go on the wheel.
 class PlaceFilters {
@@ -6,6 +7,7 @@ class PlaceFilters {
     this.minRating = 4.0,
     this.minReviews = 20,
     this.openNow = true,
+    this.kinds = const <PlaceKind>{PlaceKind.kedaiMakan},
   });
 
   /// Places rated below this stay off the wheel; null keeps every rating.
@@ -17,20 +19,27 @@ class PlaceFilters {
   /// Whether only places known to be open right now go on.
   final bool openNow;
 
+  /// The kinds of place allowed on; never empty. Kedai makan alone to start
+  /// with, since that is what the app is for.
+  final Set<PlaceKind> kinds;
+
   /// How many filters are doing something, for the badge on Filters.
   int get activeCount =>
       (minRating != null ? 1 : 0) +
       (minReviews > 0 ? 1 : 0) +
-      (openNow ? 1 : 0);
+      (openNow ? 1 : 0) +
+      (kinds.length < PlaceKind.values.length ? 1 : 0);
 
   PlaceFilters copyWith({
     double? Function()? minRating,
     int? minReviews,
     bool? openNow,
+    Set<PlaceKind>? kinds,
   }) => PlaceFilters(
     minRating: minRating == null ? this.minRating : minRating(),
     minReviews: minReviews ?? this.minReviews,
     openNow: openNow ?? this.openNow,
+    kinds: kinds ?? this.kinds,
   );
 
   @override
@@ -38,12 +47,20 @@ class PlaceFilters {
       other is PlaceFilters &&
       other.minRating == minRating &&
       other.minReviews == minReviews &&
-      other.openNow == openNow;
+      other.openNow == openNow &&
+      other.kinds.length == kinds.length &&
+      other.kinds.containsAll(kinds);
 
   @override
-  int get hashCode => Object.hash(minRating, minReviews, openNow);
+  int get hashCode => Object.hash(
+    minRating,
+    minReviews,
+    openNow,
+    Object.hashAllUnordered(kinds),
+  );
 
   bool passes(Place p) {
+    if (!kinds.contains(kindOf(p))) return false;
     final double? min = minRating;
     if (min != null && (p.rating ?? 0) < min) return false;
     if (p.reviewCount < minReviews) return false;

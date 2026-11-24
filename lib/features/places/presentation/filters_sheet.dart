@@ -6,6 +6,7 @@ import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_sheet.dart';
 import '../domain/place.dart';
 import '../domain/place_filters.dart';
+import '../domain/place_kind.dart';
 import 'places_providers.dart';
 
 /// The steps each filter offers, as (label, value).
@@ -89,6 +90,12 @@ class _FiltersSheetState extends ConsumerState<FiltersSheet> {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
+          const _Label('Kind of place'),
+          _Kinds(
+            selected: _draft.kinds,
+            onChanged: (Set<PlaceKind> k) => _set(_draft.copyWith(kinds: k)),
+          ),
+          const SizedBox(height: AppSpacing.xxl),
           const _Label('Minimum rating'),
           _Segments(
             label: 'Minimum rating',
@@ -247,6 +254,82 @@ class _Segments extends StatelessWidget {
               ),
             ),
         },
+      ),
+    );
+  }
+}
+
+/// One toggle per kind of place. At least one stays on, or nothing could
+/// ever reach the wheel.
+class _Kinds extends StatelessWidget {
+  const _Kinds({required this.selected, required this.onChanged});
+
+  final Set<PlaceKind> selected;
+  final ValueChanged<Set<PlaceKind>> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      children: <Widget>[
+        for (final PlaceKind k in PlaceKind.values)
+          _KindToggle(
+            label: k.label,
+            on: selected.contains(k),
+            // The last one on cannot be switched off.
+            onTap: selected.contains(k) && selected.length == 1
+                ? null
+                : () => onChanged(
+                    selected.contains(k)
+                        ? (Set<PlaceKind>.of(selected)..remove(k))
+                        : (Set<PlaceKind>.of(selected)..add(k)),
+                  ),
+          ),
+      ],
+    );
+  }
+}
+
+class _KindToggle extends StatelessWidget {
+  const _KindToggle({required this.label, required this.on, this.onTap});
+
+  final String label;
+  final bool on;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      toggled: on,
+      label: label,
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: AppMotion.short,
+          curve: AppMotion.enter,
+          constraints: const BoxConstraints(minHeight: 44),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.sm,
+          ),
+          decoration: ShapeDecoration(
+            color: on ? AppColors.ink : AppColors.surface,
+            shape: StadiumBorder(
+              side: BorderSide(color: on ? AppColors.ink : AppColors.line),
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: on ? AppColors.surface : AppColors.ink,
+            ),
+          ),
+        ),
       ),
     );
   }
