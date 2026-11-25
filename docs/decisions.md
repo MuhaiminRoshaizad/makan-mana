@@ -143,7 +143,8 @@ back-to-home preview.
 
 ## 013: A full wheel, with the colour in it
 
-**Decided:** a full wheel, centred, with the arrow on top. The wedges cycle
+**Decided:** a full wheel, centred, with the arrow on top (its shape since
+replaced by 021; the colours stand). The wedges cycle
 through seven colours: tomato, orange, mustard, leaf green, sky, blue and
 berry. Each label is white or ink, whichever passes WCAG AA on its wedge.
 Everything else is ink on soft white. The same colours mark each place's pin
@@ -292,3 +293,30 @@ the reels fade in. Reduce Motion shows them stopped and fades the opening.
 The splash never settles into the Spin tab, by the user's wish. Not yet seen
 on a phone: the hand-over from the system splash to Flutter's first frame is
 checked only in tests and a web build.
+
+## 021: The wheel rises from behind the tab bar
+
+**Decided:** on the Spin tab the wheel is a big circle, 720 dp across on a
+412 dp phone, whose top meets the arrow 43% of the way down the screen and
+whose centre lies far below it, so only its top shows, running on behind the
+tab bar. The Spin button floats over it just above the bar. Above the arrow,
+the count of places and the rating and distance of the place under the arrow
+sit on fixed lines; the name between them has three lines' room at 36 and
+gets smaller, down to 22, rather than move either line. Names on the wedges
+read from the rim inwards, keep one size and wrap onto two lines; only a
+longer name gets smaller, then takes a third line, then an ellipsis. On its
+side the wheel takes the right half. Chosen by the user from their own
+sketch: the flatter of three shapes, and wrapping over shrinking (demo:
+claude.ai/artifact/VLCMhYA7d1bbnDa3EiZawr).
+
+**Why:** a full wheel had to fit the screen's width, so its wedges were
+short and long names were cut. A bigger wheel gives each name the length of
+the screen's lower half, and the name above changes as the wheel turns
+without anything around it jumping.
+
+**Costs:** only three or four wedges show at a time, so the rest of the
+wheel is seen only as it turns. Listings stuffed with keywords (the longest
+is 114 characters) still end in an ellipsis on the wedge, though never above
+the arrow up to about 150 characters. The "throw the wheel" hint went, as
+the Spin button now names the action. Not yet seen on a phone: checked in
+tests and a web build.

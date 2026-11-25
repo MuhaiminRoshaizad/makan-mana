@@ -17,34 +17,27 @@ void main() {
     }
   });
 
-  test('the wheel is redrawn only when its places or the win flash change', () {
-    final WheelPainter a = WheelPainter(names: <String>['A', 'B']);
-    expect(a.shouldRepaint(WheelPainter(names: <String>['A', 'B'])), isFalse);
-    expect(a.shouldRepaint(WheelPainter(names: <String>['A', 'C'])), isTrue);
-    expect(
-      a.shouldRepaint(
-        WheelPainter(names: <String>['A', 'B'], won: 1, flash: 0.5),
-      ),
-      isTrue,
-    );
+  test('the wheel is redrawn when it turns, its places change or the win '
+      'flash changes, and not otherwise', () {
+    final List<TextPainter> labels = <TextPainter>[];
+    WheelPainter at(double turn, {int? won, List<TextPainter>? names}) =>
+        WheelPainter(
+          labels: names ?? labels,
+          turn: turn,
+          labelRimGap: 30,
+          won: won,
+        );
+    expect(at(1).shouldRepaint(at(1)), isFalse);
+    expect(at(1).shouldRepaint(at(1.1)), isTrue);
+    expect(at(1).shouldRepaint(at(1, won: 2)), isTrue);
+    expect(at(1).shouldRepaint(at(1, names: <TextPainter>[])), isTrue);
   });
 
-  testWidgets('a long name is cut short with an ellipsis instead of running '
-      'off the wheel', (WidgetTester tester) async {
-    await tester.pumpWidget(
-      Center(
-        child: CustomPaint(
-          size: const Size.square(370),
-          painter: WheelPainter(
-            names: <String>[
-              'Restoran Nasi Kandar Pelita Sri Petaling Utama',
-              'Warung Soto',
-              'Kopitiam Lama',
-            ],
-          ),
-        ),
-      ),
-    );
-    expect(tester.takeException(), isNull);
+  test('the wheel is a big circle whose top meets the arrow near the top '
+      'of its box', () {
+    final ArcGeometry g = ArcGeometry(const Size(412, 500));
+    expect(g.radius, closeTo(720, 1e-9));
+    expect(g.centre.dx, 206);
+    expect(g.centre.dy - g.radius, ArcGeometry.rimTop);
   });
 }

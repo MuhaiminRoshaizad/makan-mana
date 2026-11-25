@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +14,7 @@ import 'package:makan_mana/features/places/domain/places_repository.dart';
 import 'package:makan_mana/features/places/presentation/places_providers.dart';
 import 'package:makan_mana/features/spin/presentation/spin_screen.dart';
 import 'package:makan_mana/features/spin/presentation/spin_wheel.dart';
+import 'package:makan_mana/features/spin/presentation/wheel_readout.dart';
 
 const SearchArea area = SearchArea(
   latitude: 3.1478,
@@ -170,7 +169,6 @@ void main() {
     await show(tester);
     await loaded(tester);
     expect(find.text('15 places on the wheel'), findsOneWidget);
-    expect(find.text('Throw the wheel, or tap Spin'), findsOneWidget);
     final SpinWheel wheel = tester.widget<SpinWheel>(find.byType(SpinWheel));
     expect(wheel.names, hasLength(15));
     // The name above the wheel is one of the places on it.
@@ -289,37 +287,48 @@ void main() {
     });
   });
 
-  testWidgets('large system text fits, and the wheel ends above the '
-      'floating bar', (WidgetTester tester) async {
+  Finder spinButton() => find.widgetWithText(FilledButton, 'Spin');
+
+  testWidgets('large system text fits, the name ends above the arrow, and '
+      'Spin floats above the tab bar', (WidgetTester tester) async {
     await show(tester, scaler: const _DampedScaler());
     await loaded(tester);
     expect(tester.takeException(), isNull);
     final Rect wheel = tester.getRect(find.byType(SpinWheel));
+    final Rect readout = tester.getRect(find.byType(WheelReadout));
+    expect(readout.bottom, lessThanOrEqualTo(wheel.top));
+    // The wheel runs on behind the tab bar to the bottom edge.
+    expect(wheel.bottom, 915);
+    expect(wheel.width, 412);
     // 915 minus the 48 dp system bar, the 60 dp tab bar and its 12 dp gap.
-    expect(wheel.bottom, lessThanOrEqualTo(915 - 48 - 60 - 12));
-    expect(wheel.left, greaterThanOrEqualTo(0));
-    expect(wheel.right, lessThanOrEqualTo(412));
+    expect(
+      tester.getRect(spinButton()).bottom,
+      lessThanOrEqualTo(915 - 48 - 60 - 12),
+    );
   });
 
-  testWidgets('the hint goes once the wheel has been spun', (
-    WidgetTester tester,
-  ) async {
+  testWidgets('the count and the rating line stay put while the wheel '
+      'turns under the name', (WidgetTester tester) async {
     await show(tester);
     await loaded(tester);
-    await tester.tap(find.bySemanticsLabel('Spin'));
-    await tester.pump(const Duration(milliseconds: 500));
-    final AnimatedOpacity hint = tester.widget<AnimatedOpacity>(
-      find.ancestor(
-        of: find.text('Throw the wheel, or tap Spin'),
-        matching: find.byType(AnimatedOpacity),
-      ),
+    final Finder lines = find.descendant(
+      of: find.byType(WheelReadout),
+      matching: find.byType(Text),
     );
-    expect(hint.opacity, 0);
-    // Let the spin finish so no timers outlive the test.
+    final Rect count = tester.getRect(lines.first);
+    final Rect detail = tester.getRect(lines.last);
+    final Set<String> names = <String>{};
+    await tester.tap(spinButton());
     for (int i = 0; i < 12 * 60; i++) {
       await tester.pump(const Duration(milliseconds: 16));
+      names.add(tester.widget<Text>(lines.at(1)).data!);
+      // Centred, a line's box may narrow; it never moves up or down.
+      expect(tester.getRect(lines.first).top, count.top);
+      expect(tester.getRect(lines.last).top, detail.top);
+      if (find.text('Today you are eating at').evaluate().isNotEmpty) break;
     }
-    unawaited(Future<void>.value());
+    expect(names.length, greaterThan(3));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('when the wheel lands, the result names the same place, and '
@@ -327,7 +336,7 @@ void main() {
     await show(tester);
     await loaded(tester);
     final SpinWheel wheel = tester.widget<SpinWheel>(find.byType(SpinWheel));
-    await tester.tap(find.bySemanticsLabel('Spin'));
+    await tester.tap(spinButton());
     for (int i = 0; i < 12 * 60; i++) {
       await tester.pump(const Duration(milliseconds: 16));
       if (find.text('Today you are eating at').evaluate().isNotEmpty) break;
@@ -344,7 +353,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('Today you are eating at'), findsNothing);
-    expect(find.bySemanticsLabel('Spinning'), findsOneWidget);
+    // Spin rests while the wheel spins.
+    expect(tester.widget<FilledButton>(spinButton()).onPressed, isNull);
     for (int i = 0; i < 12 * 60; i++) {
       await tester.pump(const Duration(milliseconds: 16));
     }
@@ -356,18 +366,21 @@ void main() {
     // Landscape with three-button navigation: the buttons move to the side.
     const EdgeInsets bars = EdgeInsets.only(top: 24, right: 48);
 
-    testWidgets('the name sits beside the wheel, and both stay above the '
-        'floating bar', (WidgetTester tester) async {
+    testWidgets('the name sits beside the wheel, and Spin floats over the '
+        'wheel above the tab bar', (WidgetTester tester) async {
       await show(tester, size: wide, padding: bars);
       await loaded(tester);
       expect(tester.takeException(), isNull);
       final Rect wheel = tester.getRect(find.byType(SpinWheel));
       final Rect count = tester.getRect(find.text('15 places on the wheel'));
       expect(count.right, lessThan(wheel.left));
-      // 412 minus the floating bar's 60 dp and its 12 dp gap.
-      expect(wheel.bottom, lessThanOrEqualTo(412 - 60 - 12));
       expect(wheel.right, lessThanOrEqualTo(915 - 48));
       expect(wheel.height, greaterThan(200));
+      final Rect spin = tester.getRect(spinButton());
+      // 412 minus the floating bar's 60 dp and its 12 dp gap.
+      expect(spin.bottom, lessThanOrEqualTo(412 - 60 - 12));
+      expect(spin.left, greaterThanOrEqualTo(wheel.left));
+      expect(spin.right, lessThanOrEqualTo(wheel.right));
     });
 
     testWidgets('large system text still fits', (WidgetTester tester) async {
@@ -397,10 +410,7 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
       await tester.pump();
       final Rect wheel = tester.getRect(find.byType(SpinWheel));
-      // The wheel's disc starts under the arrow's room.
-      expect(bone.left, closeTo(wheel.left, 0.5));
-      expect(bone.bottom, closeTo(wheel.bottom, 0.5));
-      expect(bone.width, closeTo(wheel.width, 0.5));
+      expect(bone, wheel);
     });
   });
 

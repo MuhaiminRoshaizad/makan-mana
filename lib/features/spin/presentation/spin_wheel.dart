@@ -6,17 +6,21 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/theme/app_tokens.dart';
+import '../../../core/theme/wedge_colors.dart';
 import '../domain/wheel_physics.dart';
+import 'wedge_label.dart';
 import 'wheel_painter.dart';
 
-/// The lunch wheel: one wedge per place, an arrow on top, and a hub that
-/// spins it. It can also be grabbed and thrown, or dragged slowly and let
-/// go to coast. Every peg the arrow passes clicks with a haptic tick.
+/// The lunch wheel: a big wheel rising from the bottom of its box, one
+/// wedge per place, with the arrow at its top (docs/decisions.md 021).
+/// [spin] throws it; it can also be grabbed and thrown, or dragged slowly
+/// and let go to coast. Every peg the arrow passes clicks with a haptic
+/// tick.
 class SpinWheel extends StatefulWidget {
   const SpinWheel({
     super.key,
     required this.names,
-    required this.diameter,
+    this.labelsEndAbove = 0,
     this.onCurrent,
     this.onLanded,
     this.onSpinning,
@@ -26,8 +30,9 @@ class SpinWheel extends StatefulWidget {
   /// The places, in wedge order clockwise from the top.
   final List<String> names;
 
-  /// The wheel's diameter; the arrow above it adds [arrowRoom].
-  final double diameter;
+  /// How far above the box's bottom edge the names on the wedges must
+  /// end, to stay clear of what floats over the wheel there.
+  final double labelsEndAbove;
 
   /// The place under the arrow, whenever it changes, spinning or not.
   final ValueChanged<int>? onCurrent;
@@ -41,9 +46,6 @@ class SpinWheel extends StatefulWidget {
 
   /// For a repeatable start angle and throw strength in tests.
   final math.Random? random;
-
-  /// Room above the wheel for the arrow: its pivot sits 22 above the rim.
-  static const double arrowRoom = 32;
 
   @override
   State<SpinWheel> createState() => SpinWheelState();
@@ -83,6 +85,14 @@ class SpinWheelState extends State<SpinWheel> with TickerProviderStateMixin {
   double? _grabAngle;
   Offset _grabAt = Offset.zero;
 
+  /// The box last laid out in, for the centre the finger turns round.
+  Size _size = Size.zero;
+
+  /// The names laid out for the current box, kept until it or the names
+  /// change, since laying them out is the costly part of a frame.
+  List<TextPainter> _labels = const <TextPainter>[];
+  Object? _labelsFor;
+
   bool get spinning => _spinning;
 
   WheelPhysics _newWheel(double? keepTurn) => WheelPhysics(
@@ -113,10 +123,54 @@ class SpinWheelState extends State<SpinWheel> with TickerProviderStateMixin {
   void dispose() {
     _ticker.dispose();
     _flash.dispose();
+    _disposeLabels();
     super.dispose();
   }
 
-  /// Spins the wheel as the hub does.
+  void _disposeLabels() {
+    for (final TextPainter tp in _labels) {
+      tp.dispose();
+    }
+    _labels = const <TextPainter>[];
+  }
+
+  /// How far in from the rim the names start: clear of the pegs.
+  static const double _labelRimGap = 30;
+
+  List<TextPainter> _labelsIn(Size size) {
+    final Object key = (
+      Object.hashAll(widget.names),
+      size,
+      widget.labelsEndAbove,
+    );
+    if (key == _labelsFor) return _labels;
+    _disposeLabels();
+    _labelsFor = key;
+    final int n = widget.names.length;
+    if (n == 0) return _labels;
+    final ArcGeometry g = ArcGeometry(size);
+    // The names end where the box stops being clear, but never closer to
+    // the centre than a third of the way in.
+    final double outer = g.radius - _labelRimGap;
+    final double inner = math.max(
+      g.radius * 0.35,
+      g.centre.dy - (size.height - widget.labelsEndAbove),
+    );
+    final double length = math.max(60, outer - inner);
+    final double thickness = 2 * inner * math.sin(math.pi / n) - 6;
+    _labels = <TextPainter>[
+      for (int i = 0; i < n; i++)
+        layoutWedgeLabel(
+          widget.names[i],
+          length: length,
+          thickness: math.max(14, thickness),
+          color: wedgeColorFor(i, n).label,
+        ),
+    ];
+    return _labels;
+  }
+
+  /// Spins the wheel, as the Spin button does.
   void spin() {
     if (_spinning || widget.names.isEmpty) return;
     _throw(_tapMin + _random.nextDouble() * _tapRange);
@@ -211,8 +265,7 @@ class SpinWheelState extends State<SpinWheel> with TickerProviderStateMixin {
   }
 
   double _angleAt(Offset local) {
-    final Offset c = Offset(widget.diameter / 2, widget.diameter / 2);
-    final Offset d = local - c;
+    final Offset d = local - ArcGeometry(_size).centre;
     return math.atan2(d.dy, d.dx) * 180 / math.pi;
   }
 
@@ -247,7 +300,7 @@ class SpinWheelState extends State<SpinWheel> with TickerProviderStateMixin {
     if (_grabAngle == null) return;
     _grabAngle = null;
     final double speed = throwSpeed(
-      _grabAt - Offset(widget.diameter / 2, widget.diameter / 2),
+      _grabAt - ArcGeometry(_size).centre,
       d.velocity.pixelsPerSecond,
       widget.names.length,
     );
@@ -262,51 +315,36 @@ class SpinWheelState extends State<SpinWheel> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final double d = widget.diameter;
-    final double rotation =
-        _wheel.turn * 2 * math.pi / math.max(1, widget.names.length);
-    return SizedBox(
-      width: d,
-      height: d + SpinWheel.arrowRoom,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: <Widget>[
-          Positioned(
-            left: 0,
-            top: SpinWheel.arrowRoom,
-            width: d,
-            height: d,
-            child: Semantics(
-              label: 'Lunch wheel',
-              value: widget.names.isEmpty
-                  ? null
-                  : widget.names[_wheel.segmentUnderArrow],
-              child: GestureDetector(
-                onPanStart: _grab,
-                onPanUpdate: _move,
-                onPanEnd: _release,
-                child: DecoratedBox(
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    boxShadow: <BoxShadow>[
-                      BoxShadow(
-                        color: Color(0x2E26241F),
-                        blurRadius: 34,
-                        offset: Offset(0, 14),
-                      ),
-                    ],
-                  ),
-                  child: Transform.rotate(
-                    angle: rotation,
-                    // The drawing is cached; only its rotation changes
-                    // each frame.
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints c) {
+        _size = c.biggest;
+        final List<TextPainter> labels = _labelsIn(_size);
+        return Stack(
+          clipBehavior: Clip.none,
+          children: <Widget>[
+            Positioned.fill(
+              child: Semantics(
+                label: 'Lunch wheel',
+                value: widget.names.isEmpty
+                    ? null
+                    : widget.names[_wheel.segmentUnderArrow],
+                child: GestureDetector(
+                  onPanStart: _grab,
+                  onPanUpdate: _move,
+                  onPanEnd: _release,
+                  // Only the wheel repaints as it turns, not what floats
+                  // over it.
+                  // The circle runs far past the box; only the box shows.
+                  child: ClipRect(
                     child: RepaintBoundary(
                       child: AnimatedBuilder(
                         animation: _flash,
                         builder: (BuildContext context, _) => CustomPaint(
-                          size: Size.square(d),
+                          size: _size,
                           painter: WheelPainter(
-                            names: widget.names,
+                            labels: labels,
+                            turn: _wheel.turn,
+                            labelRimGap: _labelRimGap,
                             won: _won,
                             flash: _won == null
                                 ? 0
@@ -319,30 +357,21 @@ class SpinWheelState extends State<SpinWheel> with TickerProviderStateMixin {
                 ),
               ),
             ),
-          ),
-          Positioned(
-            left: d / 2 - _Arrow.pivot.dx,
-            top: SpinWheel.arrowRoom - 22 - _Arrow.pivot.dy,
-            child: Transform.rotate(
-              angle: _flapAngle * math.pi / 180,
-              alignment: Alignment(
-                _Arrow.pivot.dx / _Arrow.size.width * 2 - 1,
-                _Arrow.pivot.dy / _Arrow.size.height * 2 - 1,
+            Positioned(
+              left: _size.width / 2 - _Arrow.pivot.dx,
+              top: ArcGeometry.rimTop - 22 - _Arrow.pivot.dy,
+              child: Transform.rotate(
+                angle: _flapAngle * math.pi / 180,
+                alignment: Alignment(
+                  _Arrow.pivot.dx / _Arrow.size.width * 2 - 1,
+                  _Arrow.pivot.dy / _Arrow.size.height * 2 - 1,
+                ),
+                child: const _Arrow(),
               ),
-              child: const _Arrow(),
             ),
-          ),
-          Positioned(
-            left: d / 2 - _Hub.size / 2,
-            top: SpinWheel.arrowRoom + d / 2 - _Hub.size / 2,
-            child: _Hub(
-              spinning: _spinning,
-              enabled: widget.names.isNotEmpty,
-              onTap: spin,
-            ),
-          ),
-        ],
-      ),
+          ],
+        );
+      },
     );
   }
 }
@@ -402,79 +431,4 @@ class _ArrowPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_ArrowPainter old) => false;
-}
-
-/// The Spin button in the middle of the wheel.
-class _Hub extends StatefulWidget {
-  const _Hub({
-    required this.spinning,
-    required this.enabled,
-    required this.onTap,
-  });
-
-  static const double size = 88;
-
-  final bool spinning;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  @override
-  State<_Hub> createState() => _HubState();
-}
-
-class _HubState extends State<_Hub> {
-  bool _down = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final bool active = widget.enabled && !widget.spinning;
-    return Semantics(
-      button: true,
-      enabled: active,
-      label: widget.spinning ? 'Spinning' : 'Spin',
-      excludeSemantics: true,
-      child: GestureDetector(
-        onTapDown: active ? (_) => setState(() => _down = true) : null,
-        onTapCancel: () => setState(() => _down = false),
-        onTapUp: (_) => setState(() => _down = false),
-        onTap: active ? widget.onTap : null,
-        child: AnimatedScale(
-          scale: _down ? 0.95 : 1,
-          duration: AppMotion.short,
-          curve: AppMotion.enter,
-          child: Container(
-            width: _Hub.size,
-            height: _Hub.size,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: _down
-                  ? Color.lerp(AppColors.ink, AppColors.surface, 0.08)
-                  : AppColors.ink,
-              border: Border.all(color: AppColors.surface, width: 5),
-              boxShadow: const <BoxShadow>[
-                BoxShadow(
-                  color: Color(0x4026241F),
-                  blurRadius: 16,
-                  offset: Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Text(
-              widget.spinning ? 'Spinning' : 'Spin',
-              maxLines: 1,
-              textScaler: MediaQuery.textScalerOf(
-                context,
-              ).clamp(maxScaleFactor: 1.15),
-              style: TextStyle(
-                fontSize: widget.spinning ? 13 : 17,
-                fontWeight: FontWeight.w800,
-                color: AppColors.surface,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }

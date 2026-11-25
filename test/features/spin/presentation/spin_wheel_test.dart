@@ -41,25 +41,43 @@ void main() {
   late List<int> landed;
   late List<int> current;
   late List<bool> spinning;
+  final GlobalKey<SpinWheelState> wheelKey = GlobalKey<SpinWheelState>();
 
   Future<void> show(WidgetTester tester, {bool reduceMotion = false}) async {
     landed = <int>[];
     current = <int>[];
     spinning = <bool>[];
+    await tester.binding.setSurfaceSize(const Size(412, 915));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       MaterialApp(
         home: MediaQuery(
-          data: MediaQueryData(disableAnimations: reduceMotion),
+          data: MediaQueryData(
+            size: const Size(412, 915),
+            disableAnimations: reduceMotion,
+          ),
           child: Scaffold(
-            body: Center(
-              child: SpinWheel(
-                names: places,
-                diameter: 370,
-                random: math.Random(4),
-                onLanded: landed.add,
-                onCurrent: current.add,
-                onSpinning: spinning.add,
-              ),
+            body: Column(
+              children: <Widget>[
+                const SizedBox(height: 380),
+                Expanded(
+                  child: SpinWheel(
+                    key: wheelKey,
+                    names: places,
+                    labelsEndAbove: 120,
+                    random: math.Random(4),
+                    onLanded: landed.add,
+                    onCurrent: current.add,
+                    onSpinning: spinning.add,
+                  ),
+                ),
+                // Stands in for the screen's Spin button, without an ink
+                // ripple that would keep asking for frames.
+                GestureDetector(
+                  onTap: () => wheelKey.currentState!.spin(),
+                  child: const SizedBox(height: 48, child: Text('Spin')),
+                ),
+              ],
             ),
           ),
         ),
@@ -80,10 +98,9 @@ void main() {
     await show(tester);
     expect(current, hasLength(1));
 
-    await tester.tap(find.bySemanticsLabel('Spin'));
+    await tester.tap(find.text('Spin'));
     await tester.pump();
     expect(spinning, <bool>[true]);
-    expect(find.text('Spinning'), findsOneWidget);
 
     await runOut(tester);
     expect(landed, hasLength(1));
@@ -92,14 +109,13 @@ void main() {
     // arrow, so the name above the wheel and the result always agree.
     expect(landed.single, current.last);
     expect(current.length, greaterThan(places.length));
-    expect(find.text('Spin'), findsOneWidget);
   });
 
   testWidgets('each peg ticks, and the landing has its own heavier tap', (
     WidgetTester tester,
   ) async {
     await show(tester);
-    await tester.tap(find.bySemanticsLabel('Spin'));
+    await tester.tap(find.text('Spin'));
     await tester.pump();
     await runOut(tester);
     final int ticks = haptics
@@ -109,13 +125,13 @@ void main() {
     expect(haptics.last, 'HapticFeedbackType.mediumImpact');
   });
 
-  testWidgets('Spin does nothing while the wheel is spinning', (
+  testWidgets('spinning again does nothing while the wheel is spinning', (
     WidgetTester tester,
   ) async {
     await show(tester);
-    await tester.tap(find.bySemanticsLabel('Spin'));
+    await tester.tap(find.text('Spin'));
     await tester.pump(const Duration(milliseconds: 200));
-    await tester.tap(find.bySemanticsLabel('Spinning'), warnIfMissed: false);
+    await tester.tap(find.text('Spin'));
     await tester.pump();
     expect(spinning, <bool>[true]);
     await runOut(tester);
@@ -126,7 +142,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await show(tester);
-    await tester.tap(find.bySemanticsLabel('Spin'));
+    await tester.tap(find.text('Spin'));
     await tester.pump();
     await runOut(tester);
     expect(tester.binding.hasScheduledFrame, isFalse);
@@ -135,7 +151,7 @@ void main() {
   testWidgets('with Reduce Motion the result comes at once, from the same '
       'physics', (WidgetTester tester) async {
     await show(tester, reduceMotion: true);
-    await tester.tap(find.bySemanticsLabel('Spin'));
+    await tester.tap(find.text('Spin'));
     await tester.pump();
     expect(landed, hasLength(1));
     expect(landed.single, current.last);
@@ -150,8 +166,8 @@ void main() {
     // Down the right-hand side: clockwise.
     await tester.flingFrom(
       wheel.centerRight - const Offset(40, 80),
-      const Offset(0, 160),
-      2400,
+      const Offset(0, 200),
+      4000,
     );
     await tester.pump();
     expect(spinning, <bool>[true]);
@@ -169,7 +185,7 @@ void main() {
       wheel.centerRight - const Offset(40, 100),
     );
     for (int i = 0; i < 20; i++) {
-      await g.moveBy(const Offset(0, 10));
+      await g.moveBy(const Offset(0, 20));
       await tester.pump(const Duration(milliseconds: 50));
     }
     await tester.pump(const Duration(milliseconds: 300));
