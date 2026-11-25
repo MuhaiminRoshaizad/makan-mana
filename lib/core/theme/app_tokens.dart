@@ -1,4 +1,5 @@
 import 'package:flutter/animation.dart';
+import 'package:flutter/painting.dart' show BoxShadow, Offset;
 
 /// The app's colours. Everything outside the wheel is ink on soft white, so
 /// the wheel's wedges are the only colour on screen (docs/decisions.md 013).
@@ -43,6 +44,13 @@ abstract final class AppRadii {
   static const double card = 16;
   static const double sheet = 28;
   static const double pill = 999;
+}
+
+/// The one shadow for controls that float over the map or the wheel.
+abstract final class AppShadows {
+  static const List<BoxShadow> float = <BoxShadow>[
+    BoxShadow(color: Color(0x2926241F), blurRadius: 8, offset: Offset(0, 2)),
+  ];
 }
 
 abstract final class AppIconSize {

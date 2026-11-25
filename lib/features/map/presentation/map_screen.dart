@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/format/formatters.dart';
 import '../../../core/theme/app_tokens.dart';
+import '../../../core/widgets/spin_button.dart';
 import '../../../core/widgets/status_message.dart';
 import '../../location/domain/location_repository.dart';
 import '../../location/presentation/location_message.dart';
@@ -328,7 +329,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       )
                     : list.isEmpty || here == null
                     ? null
-                    : _SpinButton(
+                    : SpinButton(
                         key: const ValueKey<String>('spin'),
                         onPressed: _spinning ? null : () => _spin(list),
                       ),
@@ -409,7 +410,7 @@ class _ModePill extends StatelessWidget {
         decoration: const ShapeDecoration(
           color: AppColors.surface,
           shape: StadiumBorder(),
-          shadows: _floatShadow,
+          shadows: AppShadows.float,
         ),
         child: Stack(
           children: <Widget>[
@@ -668,7 +669,7 @@ class _RoundButton extends StatelessWidget {
         decoration: ShapeDecoration(
           color: on ? AppColors.ink : AppColors.surface,
           shape: const CircleBorder(),
-          shadows: _floatShadow,
+          shadows: AppShadows.float,
         ),
         child: Material(
           type: MaterialType.transparency,
@@ -729,7 +730,7 @@ class _PinCard extends ConsumerWidget {
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(20),
-          boxShadow: _floatShadow,
+          boxShadow: AppShadows.float,
         ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(
@@ -813,36 +814,6 @@ class _PinCard extends ConsumerWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-const List<BoxShadow> _floatShadow = <BoxShadow>[
-  BoxShadow(color: Color(0x2926241F), blurRadius: 8, offset: Offset(0, 2)),
-];
-
-/// Spins from the map: hops across the pins and lands on one.
-class _SpinButton extends StatelessWidget {
-  const _SpinButton({super.key, required this.onPressed});
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const ShapeDecoration(
-        shape: StadiumBorder(),
-        shadows: _floatShadow,
-      ),
-      child: FilledButton(
-        onPressed: onPressed,
-        style: FilledButton.styleFrom(
-          minimumSize: const Size(140, 56),
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxxl),
-          disabledBackgroundColor: AppColors.ink,
-          disabledForegroundColor: AppColors.surface,
-        ),
-        child: const Text('Spin'),
       ),
     );
   }
