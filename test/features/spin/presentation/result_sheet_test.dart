@@ -260,4 +260,37 @@ void main() {
     // Only the figures card's label, no reviews heading.
     expect(find.text('Reviews'), findsOneWidget);
   });
+
+  testWidgets('a review cut short says where to read the rest, and the link '
+      'opens the place on Google Maps; a short one has no link', (
+    WidgetTester tester,
+  ) async {
+    final String long = List<String>.filled(60, 'Sedap gila, ').join();
+    final String capped = 'x' * Review.keptLength;
+    await show(
+      tester,
+      place: Place(
+        id: 'ChIJ-long',
+        name: 'Kafe Panjang',
+        rating: 4.5,
+        reviewCount: 3,
+        latitude: 0,
+        longitude: 0,
+        distanceMetres: 300,
+        openNow: true,
+        reviews: <Review>[
+          const Review(rating: 5, text: 'Short and sweet.'),
+          Review(rating: 4, text: long),
+          // Kept at the list's limit: the end was cut before the app.
+          Review(rating: 3, text: capped),
+        ],
+      ),
+    );
+    final Finder more = find.text('Read the full review on Google Maps');
+    expect(more, findsNWidgets(2));
+    await tester.ensureVisible(more.first);
+    await tester.tap(more.first);
+    await tester.pump();
+    expect(opened.single.queryParameters['query_place_id'], 'ChIJ-long');
+  });
 }

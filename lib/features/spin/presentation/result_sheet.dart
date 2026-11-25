@@ -135,7 +135,11 @@ class ResultSheet extends ConsumerWidget {
                 ),
               ),
               for (final Review r in place.reviews)
-                _ReviewTile(review: r, now: now),
+                _ReviewTile(
+                  review: r,
+                  now: now,
+                  onReadMore: () => openInMaps(context, ref, place),
+                ),
             ],
             // The list keeps a few reviews; Google Maps has them all, in
             // any order, newest first included.
@@ -253,12 +257,41 @@ class _Stats extends StatelessWidget {
   }
 }
 
-/// One review: its stars, how long ago, and what it says.
+/// One review: its stars, how long ago, and what it says. A review longer
+/// than six lines, or cut short in the places list, ends with a link to
+/// read the rest on Google Maps.
 class _ReviewTile extends StatelessWidget {
-  const _ReviewTile({required this.review, required this.now});
+  const _ReviewTile({
+    required this.review,
+    required this.now,
+    required this.onReadMore,
+  });
 
   final Review review;
   final DateTime now;
+  final VoidCallback onReadMore;
+
+  static const int _maxLines = 6;
+  static const TextStyle _textStyle = TextStyle(
+    fontSize: 15,
+    height: 1.45,
+    color: AppColors.ink,
+  );
+
+  bool _overflows(BuildContext context, double width) {
+    final TextPainter tp = TextPainter(
+      text: TextSpan(
+        text: review.text,
+        style: DefaultTextStyle.of(context).style.merge(_textStyle),
+      ),
+      textScaler: MediaQuery.textScalerOf(context),
+      textDirection: Directionality.of(context),
+      maxLines: _maxLines,
+    )..layout(maxWidth: width);
+    final bool cut = tp.didExceedMaxLines;
+    tp.dispose();
+    return cut;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -303,15 +336,39 @@ class _ReviewTile extends StatelessWidget {
               ],
             ),
             const SizedBox(height: AppSpacing.xs),
-            Text(
-              review.text,
-              maxLines: 6,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 15,
-                height: 1.45,
-                color: AppColors.ink,
-              ),
+            LayoutBuilder(
+              builder: (BuildContext context, BoxConstraints c) {
+                final bool cut =
+                    review.mayBeCut || _overflows(context, c.maxWidth);
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      review.text,
+                      maxLines: _maxLines,
+                      overflow: TextOverflow.ellipsis,
+                      style: _textStyle,
+                    ),
+                    if (cut)
+                      TextButton(
+                        onPressed: onReadMore,
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: const Size(48, 44),
+                          alignment: Alignment.centerLeft,
+                          textStyle: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                        child: const Text(
+                          'Read the full review on Google Maps',
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
           ],
         ),

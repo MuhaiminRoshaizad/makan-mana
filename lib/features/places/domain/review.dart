@@ -9,4 +9,10 @@ class Review {
 
   /// The month it was written, as far as it is known.
   final DateTime? month;
+
+  /// The places list keeps at most this many characters of a review
+  /// (tool/scraper), so a text this long was cut before the app.
+  static const int keptLength = 600;
+
+  bool get mayBeCut => text.length >= keptLength;
 }
