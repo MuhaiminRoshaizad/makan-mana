@@ -72,8 +72,8 @@ class WheelPainter extends CustomPainter {
     final Offset c = g.centre;
     final double r = g.radius;
     final double seg = 2 * math.pi / n;
-    // Only wedges that reach the screen are drawn.
-    final double reach = math.asin(math.min(1, (size.width / 2 + 8) / r)) + seg;
+    // Only wedges that reach the box are drawn.
+    final double reach = inView(size) + seg;
     for (int i = 0; i < n; i++) {
       final double start = -math.pi / 2 + (i + turn) * seg;
       final double mid = start + seg / 2;
@@ -103,6 +103,16 @@ class WheelPainter extends CustomPainter {
       canvas.drawCircle(p, 4.5, _pegEdge);
     }
     canvas.drawCircle(c, r, _rim);
+  }
+
+  /// How far either side of straight up the box reaches, seen from the
+  /// wheel's centre. The bottom corners are the widest, being nearest the
+  /// centre.
+  static double inView(Size size) {
+    final ArcGeometry g = ArcGeometry(size);
+    final double below = g.centre.dy - size.height;
+    if (below <= 0) return math.pi;
+    return math.atan2(size.width / 2 + 8, below);
   }
 
   /// How far [angle] is from straight up, from -pi to pi.

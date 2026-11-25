@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:makan_mana/core/theme/wedge_colors.dart';
@@ -39,5 +41,14 @@ void main() {
     expect(g.radius, closeTo(720, 1e-9));
     expect(g.centre.dx, 206);
     expect(g.centre.dy - g.radius, ArcGeometry.rimTop);
+  });
+
+  test('wedges are drawn out to the bottom corners of the box, which are '
+      'the widest part of the wheel in view', () {
+    const Size box = Size(412, 560);
+    final ArcGeometry g = ArcGeometry(box);
+    final Offset corner = const Offset(0, 560) - g.centre;
+    final double cornerAngle = math.atan2(-corner.dx, -corner.dy);
+    expect(WheelPainter.inView(box), greaterThan(cornerAngle));
   });
 }
