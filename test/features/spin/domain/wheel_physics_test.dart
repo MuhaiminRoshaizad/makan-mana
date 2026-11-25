@@ -128,4 +128,76 @@ void main() {
     expect(clicks.every((PegClick c) => c.forward), isTrue);
     expect(w.drag(-1).single.forward, isFalse);
   });
+
+  test('a bigger wheel spins as many times round, in the same time, with '
+      'the same near-misses', () {
+    ({double turns, double seconds, double rolledBack}) average(int n) {
+      final math.Random rng = math.Random(13);
+      const int runs = 300;
+      double turns = 0, seconds = 0, back = 0;
+      for (int i = 0; i < runs; i++) {
+        final WheelPhysics w = WheelPhysics(
+          segments: n,
+          turn: rng.nextDouble() * n,
+        )..fling((10 + rng.nextDouble() * 5) * WheelPhysics.scaleFor(n));
+        final double from = w.turn;
+        final ({double seconds, int clicks, bool rolledBack}) r = spinToRest(w);
+        turns += (w.turn - from) / n;
+        seconds += r.seconds;
+        if (r.rolledBack) back++;
+      }
+      return (
+        turns: turns / runs,
+        seconds: seconds / runs,
+        rolledBack: back / runs,
+      );
+    }
+
+    final ({double turns, double seconds, double rolledBack}) tuned = average(
+      WheelPhysics.tunedFor,
+    );
+    for (final int n in <int>[20, 40, 100]) {
+      final ({double turns, double seconds, double rolledBack}) big = average(
+        n,
+      );
+      expect(big.turns, closeTo(tuned.turns, 0.15), reason: '$n places');
+      expect(big.seconds, closeTo(tuned.seconds, 0.5), reason: '$n places');
+      expect(
+        big.rolledBack,
+        closeTo(tuned.rolledBack, 0.08),
+        reason: '$n places',
+      );
+    }
+  });
+
+  test('a wheel of 40 places is still fair (chi-square under the 5% '
+      'critical value)', () {
+    const int n = 40;
+    const int runs = 4000;
+    final math.Random rng = math.Random(17);
+    final List<int> counts = List<int>.filled(n, 0);
+    for (int i = 0; i < runs; i++) {
+      final WheelPhysics w = WheelPhysics(
+        segments: n,
+        turn: rng.nextDouble() * n,
+      )..fling((10 + rng.nextDouble() * 5) * WheelPhysics.scaleFor(n));
+      spinToRest(w);
+      counts[w.segmentUnderArrow]++;
+    }
+    const double expected = runs / n;
+    final double chi = counts.fold<double>(
+      0,
+      (double sum, int c) => sum + (c - expected) * (c - expected) / expected,
+    );
+    // 39 degrees of freedom.
+    expect(chi, lessThan(54.57), reason: '$counts');
+  });
+
+  test('a wheel of 14 places or fewer keeps the tuned speeds', () {
+    expect(WheelPhysics.scaleFor(5), 1);
+    expect(WheelPhysics.scaleFor(14), 1);
+    expect(WheelPhysics.scaleFor(28), 2);
+    final WheelPhysics big = WheelPhysics(segments: 28, turn: 0)..fling(90);
+    expect(big.speed, 36);
+  });
 }

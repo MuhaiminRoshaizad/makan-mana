@@ -52,11 +52,14 @@ class SpinWheel extends StatefulWidget {
 }
 
 class SpinWheelState extends State<SpinWheel> with TickerProviderStateMixin {
-  /// Throw speeds from the hub, in segments per second.
+  /// Spin button speeds, in segments per second on a wheel of
+  /// [WheelPhysics.tunedFor] places; a bigger wheel multiplies them by its
+  /// scale, so every spin turns it about as far round.
   static const double _tapMin = 10;
   static const double _tapRange = 5;
 
-  /// A release slower than this coasts instead of counting as a spin.
+  /// A release slower than this coasts instead of counting as a spin, in
+  /// the same units.
   static const double _throwThreshold = 3;
 
   /// The arrow's largest bend, in degrees, at full flapper contact.
@@ -173,7 +176,7 @@ class SpinWheelState extends State<SpinWheel> with TickerProviderStateMixin {
   /// Spins the wheel, as the Spin button does.
   void spin() {
     if (_spinning || widget.names.isEmpty) return;
-    _throw(_tapMin + _random.nextDouble() * _tapRange);
+    _throw((_tapMin + _random.nextDouble() * _tapRange) * _wheel.scale);
   }
 
   void _throw(double speed) {
@@ -217,9 +220,9 @@ class SpinWheelState extends State<SpinWheel> with TickerProviderStateMixin {
         : math.min(0.05, (now - _last).inMicroseconds / 1e6);
     _last = now;
     final ({List<PegClick> clicks, bool stopped}) r = _wheel.advance(dt);
-    for (final PegClick c in r.clicks) {
-      _click(c.forward);
-    }
+    // A big wheel can pass several pegs in a frame; one tick stands for
+    // them all.
+    if (r.clicks.isNotEmpty) _click(r.clicks.last.forward);
     final double bend = _wheel.flapperBend;
     if (bend != 0) {
       _flapAngle = -_bendDegrees * bend;
@@ -287,9 +290,8 @@ class SpinWheelState extends State<SpinWheel> with TickerProviderStateMixin {
     _grabAngle = to;
     _grabAt = d.localPosition;
     final double segment = 360 / widget.names.length;
-    for (final PegClick c in _wheel.drag(delta / segment)) {
-      _click(c.forward);
-    }
+    final List<PegClick> crossed = _wheel.drag(delta / segment);
+    if (crossed.isNotEmpty) _click(crossed.last.forward);
     // The arrow still swings back while the wheel is held.
     if (!_ticker.isActive) _start();
     setState(() {});
@@ -304,7 +306,7 @@ class SpinWheelState extends State<SpinWheel> with TickerProviderStateMixin {
       d.velocity.pixelsPerSecond,
       widget.names.length,
     );
-    if (speed.abs() >= _throwThreshold) {
+    if (speed.abs() >= _throwThreshold * _wheel.scale) {
       // A little randomness, so the same flick never repeats a result.
       _throw(speed * (0.92 + _random.nextDouble() * 0.16));
     } else {

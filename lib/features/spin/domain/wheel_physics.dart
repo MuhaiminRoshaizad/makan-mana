@@ -23,30 +23,50 @@ class WheelPhysics {
   WheelPhysics({
     required this.segments,
     required this._turn,
-    this.stiffness = 10,
-    this.friction = 2.0,
+    double stiffness = 10,
+    double friction = 2.0,
     this.reach = 0.35,
-    this.maxSpeed = 18,
-  }) : assert(segments > 0);
+    double maxSpeed = 18,
+  }) : assert(segments > 0),
+       scale = scaleFor(segments),
+       stiffness = stiffness * scaleFor(segments),
+       friction = friction * scaleFor(segments),
+       maxSpeed = maxSpeed * scaleFor(segments);
 
   /// Places on the wheel.
   final int segments;
 
-  /// The flapper's spring constant, in segments/s² per segment of bend.
+  /// The wheel's size in places that the speeds were tuned for.
+  static const int tunedFor = 14;
+
+  /// How much faster, in segments, a wheel of [segments] runs than one of
+  /// [tunedFor]: as many times as it has more places, so a spin turns it
+  /// as far round in the same time. A smaller wheel is not slowed, as its
+  /// pegs would then stop it in a turn or two.
+  static double scaleFor(int segments) => math.max(1, segments / tunedFor);
+
+  /// [scaleFor] this wheel. Throw speeds given in segments for a wheel of
+  /// [tunedFor] are multiplied by it.
+  final double scale;
+
+  /// The flapper's spring constant, in segments/s² per segment of bend,
+  /// already multiplied by [scale].
   final double stiffness;
 
-  /// Steady slowdown, in segments/s².
+  /// Steady slowdown, in segments/s², already multiplied by [scale].
   final double friction;
 
   /// How far before a peg the flapper starts to resist, in segments.
   final double reach;
 
-  /// A harder throw is capped here, in segments per second.
+  /// A harder throw is capped here, in segments per second, already
+  /// multiplied by [scale].
   final double maxSpeed;
 
   /// One substep: small enough that the flapper's spring stays stable at
-  /// any stiffness used here.
-  static const double _step = 1 / 1000;
+  /// any stiffness used here, and that the fastest wheel cannot pass a
+  /// peg's reach in one step.
+  double get _step => 1 / (1000 * scale);
 
   /// Below this speed, with the flapper no longer pushing harder than
   /// friction holds, the wheel has stopped.

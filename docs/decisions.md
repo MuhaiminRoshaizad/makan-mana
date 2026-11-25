@@ -181,6 +181,14 @@ a 5% critical value of 22.4).
 **Costs:** a spin takes about 4 to 6 seconds. The result depends on the
 throw, so tests drive the model with fixed inputs rather than gestures.
 
+**Wheel size:** the values above are for 14 places or fewer. A bigger wheel
+multiplies friction, stiffness, top speed, the Spin button's speeds and the
+throw threshold by places / 14, so every size turns about 2.2 times in about
+5 seconds and rolls back on about a quarter of spins. Unscaled, 40 places
+turned 0.8 times a spin. It stays fair at 20, 40, 100 and 300 places
+(chi-square under the 5% value). Fewer places are not slowed: their pegs
+would stop the wheel within a turn or two.
+
 ## 015: Keep the name Makan Mana
 
 **Decided:** the app stays Makan Mana, with the ids `my.minned.makanmana`.
