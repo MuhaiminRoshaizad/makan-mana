@@ -107,7 +107,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       _hop = winner.id;
       _ringAt = at;
       _ringTick++;
+      // The winner is left alone, as after See it on the map. Marked as
+      // shown, so this spin's own fly-in and ring are not repeated.
+      _aloneShown = winner.id;
     });
+    ref.read(aloneOnMapProvider.notifier).show(winner.id);
     if (!still) await Future<void>.delayed(const Duration(milliseconds: 640));
     if (!mounted) return;
     setState(() {

@@ -340,7 +340,7 @@ it shrinks back, and further down it goes. Tapping another pin changes what
 the card shows without it leaving. The wheel's card adds See it on the map,
 which opens the Map tab with every other place put away, flies in on the
 winner and shows its card; Show all, or closing the card, brings the others
-back. Pins move on the app's spring (`AppMotion.spring`): a chosen pin
+back. A spin on the map ends the same way, with the winner left alone. Pins move on the app's spring (`AppMotion.spring`): a chosen pin
 springs up and settles, and so does each pin a map spin hops across. Chosen
 by the user from a demo with two options for a tapped pin; they took the
 card that grows into the sheet over the full sheet at once (demo:

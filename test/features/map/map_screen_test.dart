@@ -414,6 +414,32 @@ void main() {
       expect(find.text('Spin'), findsOneWidget);
     });
 
+    testWidgets('the winner is left alone on the map as it lands, as after '
+        'See it on the map; closing its card brings the others back', (
+      WidgetTester tester,
+    ) async {
+      await show(tester);
+      await tester.tap(find.text('Spin'));
+      for (int i = 0; i < 15; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      final String winner = shown!.selectedId!;
+      final Place p = shown!.places.firstWhere((Place x) => x.id == winner);
+      // Landed: the others go before the camera flies in.
+      expect(shown!.aloneId, winner);
+      expect(shown!.focusTick, 0);
+      await tester.pump(const Duration(milliseconds: 2000));
+      await tester.pumpAndSettle();
+      // One fly-in and one ring, not a second from showing it alone.
+      expect(shown!.focusTick, 1);
+      expect(shown!.ringTick, 1);
+      expect(find.text('Only ${p.name} on the map'), findsOneWidget);
+      await tester.tap(find.byTooltip('Close'));
+      await tester.pumpAndSettle();
+      expect(shown!.aloneId, isNull);
+      expect(find.text('Show all'), findsNothing);
+    });
+
     testWidgets('the card leaves before Spin comes back, so the two never '
         'cross', (WidgetTester tester) async {
       await show(tester);
