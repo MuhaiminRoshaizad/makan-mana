@@ -309,7 +309,28 @@ void main() {
     await tester.tap(find.bySemanticsLabel('Pin'));
     await settle(tester);
     expect(shown!.dropPin, here);
-    expect(find.text('Drag the pin to where you want to eat'), findsOneWidget);
+    expect(
+      find.text('Move the map to put the pin where you want to eat'),
+      findsOneWidget,
+    );
+    // The pin stays at the centre, over the map, and lifts while a finger
+    // is on the map.
+    final Finder pin = find.bySemanticsLabel('Pin where you will eat');
+    expect(pin, findsOneWidget);
+    expect(tester.getCenter(pin).dx, closeTo(412 / 2, 1));
+    final Finder drawn = find.descendant(
+      of: pin,
+      matching: find.byType(CustomPaint),
+    );
+    final double rest = tester.getTopLeft(drawn).dy;
+    final TestGesture finger = await tester.startGesture(
+      const Offset(100, 600),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(drawn).dy, lessThan(rest));
+    await finger.up();
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(drawn).dy, rest);
     expect(
       tester.getSemantics(find.bySemanticsLabel('Pin')),
       isSemantics(isChecked: true, isInMutuallyExclusiveGroup: true),

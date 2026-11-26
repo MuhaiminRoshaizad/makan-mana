@@ -41,6 +41,12 @@ asks.
 **Costs:** a user who always eats near the same place drops the pin again
 each time location is off.
 
+**Placing the pin (26/11/2026):** the pin stays at the centre of the map
+and the map moves under it, as in penangsmartkariah's coordinate setting;
+it lifts while a finger is on the map, and once the map stops, the spot
+under its tip is where the search goes. Dragging the pin itself was hard
+to aim, since the finger covered the spot.
+
 ## 004: Radius as a map setting, up to 50 km
 
 **Decided:** the search radius is set on the map and drawn there as a circle.

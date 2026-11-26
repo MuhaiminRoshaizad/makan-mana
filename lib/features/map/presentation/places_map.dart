@@ -128,7 +128,6 @@ class _PlacesMapState extends State<PlacesMap>
   bool _ready = false;
   Size _size = const Size(412, 915);
   Timer? _ring;
-  Timer? _bounce;
 
   /// Pins springing up or settling back. Flutter draws each one over the
   /// map at its spot, frame by frame, and hands it back to the map once it
@@ -161,7 +160,6 @@ class _PlacesMapState extends State<PlacesMap>
   @override
   void dispose() {
     _ring?.cancel();
-    _bounce?.cancel();
     _ticker.dispose();
     super.dispose();
   }
@@ -347,8 +345,14 @@ class _PlacesMapState extends State<PlacesMap>
       _hideOthers(_p.aloneId != null);
     }
     if (moved) map.setGeoJsonSource('area', _areaJson());
-    if (was.dropPin != _p.dropPin) {
-      map.setGeoJsonSource('drop', _dropJson(_p.dropPin, 0));
+    // Into Pin mode: the map slides so the spot sits under the centre pin.
+    final LatLon? pin = _p.dropPin;
+    final bool pinMode = pin != null;
+    if (was.dropPin == null && pin != null) {
+      map.animateCamera(
+        CameraUpdate.newLatLng(LatLng(pin.latitude, pin.longitude)),
+        duration: _still ? Duration.zero : AppMotion.long,
+      );
     }
     if (was.you != _p.you) _showYou();
     // Other places listed, as after a change of filters: frame them, unless
@@ -357,7 +361,9 @@ class _PlacesMapState extends State<PlacesMap>
         !_sameIds(was.places, _p.places) &&
         _p.selectedId == null &&
         _p.aloneId == null;
-    if (moved || relisted || was.recentre != _p.recentre) {
+    // In Pin mode the search follows the map, so the camera stays where
+    // it was moved to.
+    if (((moved || relisted) && !pinMode) || was.recentre != _p.recentre) {
       map.animateCamera(
         CameraUpdate.newCameraPosition(_home()),
         duration: _still ? Duration.zero : const Duration(milliseconds: 750),
@@ -442,7 +448,6 @@ class _PlacesMapState extends State<PlacesMap>
     for (int i = 0; i < wedgeColors.length; i++) {
       await _addPin('pin-$i', wedgeColors[i].fill, PinImages.placeSize, dpr);
     }
-    await _addPin('pin-drop', AppColors.ink, PinImages.dropSize, dpr);
     await map.addGeoJsonSource('area', _areaJson());
     await map.addFillLayer(
       'area',
@@ -473,37 +478,6 @@ class _PlacesMapState extends State<PlacesMap>
         circlePitchAlignment: 'map',
       ),
       enableInteraction: false,
-    );
-    await map.addGeoJsonSource('drop', _dropJson(_p.dropPin, 0));
-    await map.addSymbolLayer(
-      'drop',
-      'drop-pin',
-      SymbolLayerProperties(
-        iconImage: 'pin-drop',
-        iconAnchor: 'bottom',
-        iconAllowOverlap: true,
-        iconIgnorePlacement: true,
-        // Lifted while dragged, then down past the ground and back: the
-        // drop's one small bounce.
-        iconOffset: <Object>[
-          'match',
-          <Object>['get', 'stage'],
-          1,
-          <Object>[
-            'literal',
-            <double>[0, -14],
-          ],
-          2,
-          <Object>[
-            'literal',
-            <double>[0, 3],
-          ],
-          <Object>[
-            'literal',
-            <double>[0, 0],
-          ],
-        ],
-      ),
     );
     await _showYou();
     _others = _othersTo = _p.aloneId == null ? 1 : 0;
@@ -554,50 +528,23 @@ class _PlacesMapState extends State<PlacesMap>
     if (layerId == 'place-pins') _p.onPinTap(id);
   }
 
-  void _featureDragged(
-    Point<double> point,
-    LatLng origin,
-    LatLng current,
-    LatLng delta,
-    String id,
-    Annotation? annotation,
-    DragEventType type,
-  ) {
-    if (id != 'drop') return;
-    final LatLon at = (
-      latitude: current.latitude,
-      longitude: current.longitude,
+  /// In Pin mode, once the map has stopped, the spot under the centre pin
+  /// becomes where to search.
+  Future<void> _readCentre() async {
+    final LatLon? pin = _p.dropPin;
+    final MapLibreMapController? map = _map;
+    if (pin == null || map == null) return;
+    final LatLng at = await map.toLatLng(
+      Point<double>(_size.width / 2, _size.height / 2),
     );
-    switch (type) {
-      case DragEventType.start:
-      case DragEventType.drag:
-        _bounce?.cancel();
-        _map!.setGeoJsonSource('drop', _dropJson(at, 1));
-      case DragEventType.end:
-        _p.onPinDropped(at.latitude, at.longitude);
-        _land(at);
-    }
-  }
-
-  /// The dropped pin comes down past the ground, settles, and sends out a
-  /// ring where it lands.
-  void _land(LatLon at) {
-    final MapLibreMapController map = _map!;
-    if (_still) {
-      map.setGeoJsonSource('drop', _dropJson(at, 0));
+    if (!mounted || _p.dropPin == null) return;
+    // Rounding in the camera moves the centre by a hair; only a real move
+    // starts a new search.
+    if (distanceMetres(pin.latitude, pin.longitude, at.latitude, at.longitude) <
+        2) {
       return;
     }
-    int step = 0;
-    const List<int> stages = <int>[2, 2, 0];
-    _bounce?.cancel();
-    _bounce = Timer.periodic(const Duration(milliseconds: 90), (Timer t) {
-      if (!mounted || step >= stages.length) {
-        t.cancel();
-        return;
-      }
-      map.setGeoJsonSource('drop', _dropJson(at, stages[step++]));
-    });
-    _sendRing(at);
+    _p.onPinDropped(at.latitude, at.longitude);
   }
 
   /// A ring spreading out from [at] and fading, over 700 ms.
@@ -790,17 +737,6 @@ class _PlacesMapState extends State<PlacesMap>
     );
   }
 
-  /// The dropped pin at [at], at a [stage] of its drop: 0 resting, 1 lifted,
-  /// 2 just past the ground.
-  Map<String, dynamic> _dropJson(LatLon? at, int stage) =>
-      _collection(<Map<String, dynamic>>[
-        if (at != null)
-          _point(at, <String, dynamic>{
-            'draggable': true,
-            'stage': stage,
-          }, 'drop'),
-      ]);
-
   Map<String, dynamic> _ringJson(LatLon? at, double radius, double opacity) =>
       _collection(<Map<String, dynamic>>[
         if (at != null)
@@ -821,10 +757,10 @@ class _PlacesMapState extends State<PlacesMap>
           onMapCreated: (MapLibreMapController map) {
             _map = map;
             map.onFeatureTapped.add(_featureTapped);
-            map.onFeatureDrag.add(_featureDragged);
           },
           onStyleLoadedCallback: _styleLoaded,
           onCameraMoveStarted: (_) => _settleFloats(),
+          onCameraIdle: _readCentre,
           onMapClick: (_, _) => _p.onMapTap(),
           compassEnabled: false,
           // MapLibre holds back a single tap until the double-tap timeout,

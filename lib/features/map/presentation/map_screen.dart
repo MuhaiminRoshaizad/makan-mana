@@ -19,6 +19,7 @@ import '../../places/domain/places_repository.dart';
 import '../../places/presentation/filters_button.dart';
 import '../../places/presentation/place_card.dart';
 import '../../places/presentation/places_providers.dart';
+import 'pin_images.dart';
 import 'places_map.dart';
 
 /// The Map tab: the places on the wheel, round you or a pin you drop.
@@ -61,6 +62,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   /// Shown once on entering Pin mode: how to move the pin.
   bool _hint = false;
+
+  /// Fingers on the map, so the centre pin lifts while the map is moved
+  /// under it.
+  int _fingers = 0;
   Timer? _hintTimer;
 
   @override
@@ -259,31 +264,49 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         children: <Widget>[
           if (here != null)
             Positioned.fill(
-              child: ref.watch(mapViewProvider)(
-                MapProps(
-                  latitude: here.latitude,
-                  longitude: here.longitude,
-                  radiusMetres: filters.maxDistanceMetres,
-                  places: list,
-                  selectedId: _hop ?? selected?.id,
-                  tilted: _tilted,
-                  recentre: _recentre,
-                  you: location is Located
-                      ? (
-                          latitude: location.latitude,
-                          longitude: location.longitude,
-                        )
-                      : null,
-                  dropPin: pin,
-                  onPinTap: _select,
-                  onMapTap: () => _select(null),
-                  onPinDropped: (double lat, double lon) =>
-                      ref.read(pinProvider.notifier).drop(lat, lon),
-                  focus: _focus,
-                  focusTick: _focusTick,
-                  ringAt: _ringAt,
-                  ringTick: _ringTick,
-                  aloneId: alone?.id,
+              child: Listener(
+                onPointerDown: (_) => setState(() => _fingers++),
+                onPointerUp: (_) => setState(() => _fingers--),
+                onPointerCancel: (_) => setState(() => _fingers--),
+                child: ref.watch(mapViewProvider)(
+                  MapProps(
+                    latitude: here.latitude,
+                    longitude: here.longitude,
+                    radiusMetres: filters.maxDistanceMetres,
+                    places: list,
+                    selectedId: _hop ?? selected?.id,
+                    tilted: _tilted,
+                    recentre: _recentre,
+                    you: location is Located
+                        ? (
+                            latitude: location.latitude,
+                            longitude: location.longitude,
+                          )
+                        : null,
+                    dropPin: pin,
+                    onPinTap: _select,
+                    onMapTap: () => _select(null),
+                    onPinDropped: (double lat, double lon) =>
+                        ref.read(pinProvider.notifier).drop(lat, lon),
+                    focus: _focus,
+                    focusTick: _focusTick,
+                    ringAt: _ringAt,
+                    ringTick: _ringTick,
+                    aloneId: alone?.id,
+                  ),
+                ),
+              ),
+            ),
+          // In Pin mode the pin stays at the centre and the map moves under
+          // it, as in penangsmartkariah's coordinate setting.
+          if (pinMode && here != null)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Center(
+                  child: Transform.translate(
+                    offset: Offset(0, -PinImages.dropSize.height / 2),
+                    child: _CentrePin(lifted: _fingers > 0),
+                  ),
                 ),
               ),
             ),
@@ -377,7 +400,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               right: 100,
               child: _Hint(
                 visible: _hint && pinMode,
-                text: 'Drag the pin to where you want to eat',
+                text: 'Move the map to put the pin where you want to eat',
               ),
             ),
             Positioned(
@@ -581,6 +604,66 @@ class _ModeButton extends StatelessWidget {
 }
 
 /// A one-line hint that drops in, then leaves by itself.
+/// The pin that marks where to search in Pin mode, its tip at the centre of
+/// the map. It lifts while the map is being moved under it and drops back
+/// with a small bounce when the finger lets go.
+class _CentrePin extends StatelessWidget {
+  const _CentrePin({required this.lifted});
+
+  final bool lifted;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool still = MediaQuery.disableAnimationsOf(context);
+    final Duration time = still
+        ? Duration.zero
+        : lifted
+        ? AppMotion.short
+        : AppMotion.medium;
+    final Curve curve = lifted
+        ? AppMotion.enter
+        : const Cubic(0.3, 1.6, 0.5, 1);
+    final Size size = PinImages.dropSize;
+    return Semantics(
+      label: 'Pin where you will eat',
+      child: SizedBox.fromSize(
+        size: size,
+        child: Stack(
+          alignment: Alignment.bottomCenter,
+          children: <Widget>[
+            // Where the tip will land, so the exact spot stays visible.
+            AnimatedScale(
+              duration: time,
+              scale: lifted ? 1.6 : 1,
+              child: AnimatedOpacity(
+                duration: time,
+                opacity: lifted ? 0.5 : 0,
+                child: Container(
+                  width: 8,
+                  height: 4,
+                  decoration: const BoxDecoration(
+                    color: Color(0x5926241F),
+                    borderRadius: BorderRadius.all(Radius.elliptical(4, 2)),
+                  ),
+                ),
+              ),
+            ),
+            AnimatedSlide(
+              duration: time,
+              curve: curve,
+              offset: lifted ? const Offset(0, -0.25) : Offset.zero,
+              child: CustomPaint(
+                size: size,
+                painter: const PinPainter(AppColors.ink),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _Hint extends StatelessWidget {
   const _Hint({required this.visible, required this.text});
 
