@@ -87,6 +87,20 @@ class PinNotifier extends Notifier<LatLon?> {
   void clear() => state = null;
 }
 
+/// The one place the map shows on its own, by Google id: a wheel's winner
+/// sent there with See it on the map. Null shows every place.
+final NotifierProvider<AloneOnMapNotifier, String?> aloneOnMapProvider =
+    NotifierProvider<AloneOnMapNotifier, String?>(AloneOnMapNotifier.new);
+
+class AloneOnMapNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void show(String placeId) => state = placeId;
+
+  void clear() => state = null;
+}
+
 /// Where a map with no location to go on starts: the middle of the places.
 final FutureProvider<LatLon?> mapStartProvider = FutureProvider<LatLon?>(
   (Ref ref) => ref.watch(placesRepositoryProvider).middle(),

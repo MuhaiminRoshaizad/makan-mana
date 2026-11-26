@@ -7,6 +7,7 @@ import 'package:makan_mana/app/app.dart';
 import 'package:makan_mana/app/floating_nav.dart';
 import 'package:makan_mana/app/tab_root.dart';
 import 'package:makan_mana/core/widgets/toast.dart';
+import 'package:makan_mana/features/places/presentation/places_providers.dart';
 
 void main() {
   int closes = 0;
@@ -46,6 +47,18 @@ void main() {
 
   int tab(WidgetTester tester) =>
       tester.widget<FloatingNav>(find.byType(FloatingNav)).index;
+
+  testWidgets('a place sent to the map from the Spin tab opens the Map tab', (
+    WidgetTester tester,
+  ) async {
+    await openApp(tester);
+    expect(tab(tester), 0);
+    ProviderScope.containerOf(
+      tester.element(find.byType(FloatingNav)),
+    ).read(aloneOnMapProvider.notifier).show('anything');
+    await tester.pumpAndSettle();
+    expect(tab(tester), 1);
+  });
 
   testWidgets('Back on Map goes to Spin; on Spin it asks once, and a second '
       'Back closes the app', (WidgetTester tester) async {

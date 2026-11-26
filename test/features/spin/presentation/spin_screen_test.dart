@@ -11,6 +11,7 @@ import 'package:makan_mana/features/places/domain/filters_store.dart';
 import 'package:makan_mana/features/places/domain/place.dart';
 import 'package:makan_mana/features/places/domain/place_filters.dart';
 import 'package:makan_mana/features/places/domain/places_repository.dart';
+import 'package:makan_mana/features/places/presentation/place_sheet.dart';
 import 'package:makan_mana/features/places/presentation/places_providers.dart';
 import 'package:makan_mana/features/spin/presentation/spin_screen.dart';
 import 'package:makan_mana/features/spin/presentation/spin_wheel.dart';
@@ -329,6 +330,37 @@ void main() {
     }
     expect(names.length, greaterThan(3));
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('See it on the map closes the result and sends the place to '
+      'the map', (WidgetTester tester) async {
+    await show(tester);
+    await loaded(tester);
+    await tester.tap(spinButton());
+    for (int i = 0; i < 12 * 60; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      if (find.text('Today you are eating at').evaluate().isNotEmpty) break;
+    }
+    await tester.pumpAndSettle();
+    final String name = tester
+        .widget<Text>(
+          find
+              .descendant(
+                of: find.byType(PlaceSummary),
+                matching: find.byType(Text),
+              )
+              .at(1),
+        )
+        .data!;
+    await tester.tap(find.text('See it on the map'));
+    await tester.pumpAndSettle();
+    expect(find.text('Today you are eating at'), findsNothing);
+    final ProviderContainer c = ProviderScope.containerOf(
+      tester.element(find.byType(SpinScreen)),
+    );
+    final String? sent = c.read(aloneOnMapProvider);
+    final List<Place> places = c.read(wheelPlacesProvider).value!;
+    expect(places.firstWhere((Place p) => p.id == sent).name, name);
   });
 
   testWidgets('when the wheel lands, the result names the same place, and '

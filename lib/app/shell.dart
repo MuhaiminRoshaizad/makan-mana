@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/theme/app_tokens.dart';
+import '../features/places/presentation/places_providers.dart';
 import 'floating_nav.dart';
 import 'tab_root.dart';
 
@@ -22,6 +23,10 @@ class AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // See it on the map, from the wheel's result, opens the Map tab.
+    ref.listen<String?>(aloneOnMapProvider, (String? _, String? now) {
+      if (now != null && shell.currentIndex != 1) _select(ref, 1);
+    });
     return Scaffold(
       // The keyboard covers the bar, as on iOS, instead of lifting it.
       resizeToAvoidBottomInset: false,

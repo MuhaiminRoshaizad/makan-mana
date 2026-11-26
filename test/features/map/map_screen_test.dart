@@ -214,6 +214,38 @@ void main() {
     expect(find.byType(PlaceSheet), findsOneWidget);
   });
 
+  testWidgets('a place sent from the wheel shows alone: the others are put '
+      'away, the camera flies in on it and its card says it won; Show all '
+      'brings the others back and keeps the card', (WidgetTester tester) async {
+    await show(tester);
+    final Place p = shown!.places[2];
+    container.read(aloneOnMapProvider.notifier).show(p.id);
+    await tester.pumpAndSettle();
+    expect(shown!.aloneId, p.id);
+    expect(shown!.selectedId, p.id);
+    expect(shown!.focus, (latitude: p.latitude, longitude: p.longitude));
+    expect(find.text('Today you are eating at'), findsOneWidget);
+    expect(find.text('Only ${p.name} on the map'), findsOneWidget);
+    await tester.tap(find.text('Show all'));
+    await tester.pumpAndSettle();
+    expect(shown!.aloneId, isNull);
+    expect(container.read(aloneOnMapProvider), isNull);
+    expect(find.text('Today you are eating at'), findsOneWidget);
+  });
+
+  testWidgets('closing the card of a place shown alone brings the others '
+      'back and the camera home', (WidgetTester tester) async {
+    await show(tester);
+    final int home = shown!.recentre;
+    container.read(aloneOnMapProvider.notifier).show(shown!.places.first.id);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+    expect(shown!.aloneId, isNull);
+    expect(shown!.recentre, home + 1);
+    expect(find.text('Show all'), findsNothing);
+  });
+
   testWidgets('a card for a place the filters then take off goes too', (
     WidgetTester tester,
   ) async {

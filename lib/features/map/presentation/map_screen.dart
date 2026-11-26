@@ -51,6 +51,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   LatLon? _ringAt;
   int _ringTick = 0;
 
+  /// The place sent from the wheel that the map has flown in on, so it
+  /// does so once per sending.
+  String? _aloneShown;
+
   /// Location is asked for once, the first time the map opens without it.
   bool _asked = false;
 
@@ -72,6 +76,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   /// in on the winner, and only then shows its card.
   Future<void> _spin(List<Place> list) async {
     if (_spinning || list.isEmpty) return;
+    ref.read(aloneOnMapProvider.notifier).clear();
     final bool still = MediaQuery.disableAnimationsOf(context);
     setState(() {
       _spinning = true;
@@ -120,11 +125,31 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   void _select(String? id) {
     if (_spinning) return;
+    // Closing the card, or choosing another place, brings the rest back.
+    if (id != ref.read(aloneOnMapProvider)) {
+      ref.read(aloneOnMapProvider.notifier).clear();
+    }
     setState(() {
       // Putting a winner's card away flies the camera back out.
       if (id == null && _won) _recentre++;
       _selected = id;
       _won = false;
+    });
+  }
+
+  /// Flies in on [place], sent from the wheel, with a ring where it stands
+  /// and its card saying it won.
+  void _showAlone(Place place) {
+    final LatLon at = (latitude: place.latitude, longitude: place.longitude);
+    setState(() {
+      _aloneShown = place.id;
+      _hint = false;
+      _selected = place.id;
+      _won = true;
+      _focus = at;
+      _focusTick++;
+      _ringAt = at;
+      _ringTick++;
     });
   }
 
@@ -171,6 +196,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final Place? selected = list
         .where((Place p) => p.id == _selected)
         .firstOrNull;
+    final String? sentId = ref.watch(aloneOnMapProvider);
+    final Place? alone = list.where((Place p) => p.id == sentId).firstOrNull;
+    if (alone != null && alone.id != _aloneShown) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_spinning) _showAlone(alone);
+      });
+    } else if (sentId == null && _aloneShown != null) {
+      _aloneShown = null;
+    }
     final EdgeInsets safe = MediaQuery.paddingOf(context);
     final double clearance = AppNavMetrics.clearance(safe.bottom);
     final SearchArea? here = area.value;
@@ -243,6 +277,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   focusTick: _focusTick,
                   ringAt: _ringAt,
                   ringTick: _ringTick,
+                  aloneId: alone?.id,
                 ),
               ),
             ),
@@ -263,48 +298,71 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               top: safe.top + AppSpacing.lg,
               left: AppSpacing.lg,
               right: AppSpacing.lg,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.topLeft,
-                      child: FiltersButton(
-                        label: _count(places, filters, chosen),
+              child: AnimatedSwitcher(
+                duration: AppMotion.medium,
+                switchInCurve: AppMotion.enter,
+                switchOutCurve: AppMotion.exit,
+                transitionBuilder: (Widget child, Animation<double> a) =>
+                    FadeTransition(
+                      opacity: a,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, -0.4),
+                          end: Offset.zero,
+                        ).animate(a),
+                        child: child,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: <Widget>[
-                      _RoundButton(
-                        label: '3D view',
-                        toggled: _tilted,
-                        onTap: () => setState(() => _tilted = !_tilted),
-                        child: const Text(
-                          '3D',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      _ModePill(
-                        pin: pinMode,
-                        onYou: _useYou,
-                        onPin: () => _dropPin(
-                          pin ??
-                              (
-                                latitude: here?.latitude ?? 0,
-                                longitude: here?.longitude ?? 0,
+                child: alone != null
+                    ? _AloneBar(
+                        key: const ValueKey<String>('alone'),
+                        name: alone.name,
+                        onShowAll: () =>
+                            ref.read(aloneOnMapProvider.notifier).clear(),
+                      )
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.topLeft,
+                              child: FiltersButton(
+                                label: _count(places, filters, chosen),
                               ),
-                        ),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: <Widget>[
+                              _RoundButton(
+                                label: '3D view',
+                                toggled: _tilted,
+                                onTap: () => setState(() => _tilted = !_tilted),
+                                child: const Text(
+                                  '3D',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              _ModePill(
+                                pin: pinMode,
+                                onYou: _useYou,
+                                onPin: () => _dropPin(
+                                  pin ??
+                                      (
+                                        latitude: here?.latitude ?? 0,
+                                        longitude: here?.longitude ?? 0,
+                                      ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ],
               ),
             ),
             Positioned(
@@ -556,6 +614,62 @@ class _Hint extends StatelessWidget {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Says the map shows one place alone, with a way to bring the rest back.
+class _AloneBar extends StatelessWidget {
+  const _AloneBar({super.key, required this.name, required this.onShowAll});
+
+  final String name;
+  final VoidCallback onShowAll;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadii.pill),
+        boxShadow: AppShadows.float,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.xs,
+          AppSpacing.xs,
+          AppSpacing.xs,
+        ),
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                'Only $name on the map',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.ink,
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            FilledButton(
+              onPressed: onShowAll,
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(48, 44),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                textStyle: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              child: const Text('Show all'),
+            ),
+          ],
         ),
       ),
     );

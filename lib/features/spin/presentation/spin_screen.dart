@@ -73,6 +73,10 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
       showPlaceSheet(
         context,
         place: place,
+        onSeeOnMap: () {
+          Navigator.of(context, rootNavigator: true).pop();
+          ref.read(aloneOnMapProvider.notifier).show(place.id);
+        },
         onSpinAgain: () {
           Navigator.of(context, rootNavigator: true).pop();
           _wheel.currentState?.spin();
