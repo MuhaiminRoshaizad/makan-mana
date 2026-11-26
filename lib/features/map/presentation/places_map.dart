@@ -130,11 +130,15 @@ class _PlacesMapState extends State<PlacesMap>
   Timer? _ring;
   Timer? _bounce;
 
-  /// Pins on the move: the chosen one springs up on the app's spring and
-  /// the one it replaced settles back. They are drawn on their own layer,
-  /// so each frame sends one or two points rather than every place.
+  /// Pins springing up or settling back. Flutter draws each one over the
+  /// map at its spot, frame by frame, and hands it back to the map once it
+  /// is still. Moved inside the map instead, with a GeoJSON update a frame,
+  /// a pin showed about ten steps a second on a Pixel 9 Pro.
   late final Ticker _ticker = createTicker(_tick);
-  final Map<String, _Lift> _lifts = <String, _Lift>{};
+  final Map<String, _Float> _floats = <String, _Float>{};
+
+  /// Chosen pins at rest, which the map draws lifted on its chosen layer.
+  final Set<String> _raised = <String>{};
 
   /// How much of the other pins shows while one place is alone: 1 all, 0
   /// none.
@@ -145,8 +149,7 @@ class _PlacesMapState extends State<PlacesMap>
   Duration _now = Duration.zero;
 
   /// What the map still has to be told. Only one update is in flight at a
-  /// time and the next one carries the latest state, so a slow map skips
-  /// frames instead of queueing them behind a tap.
+  /// time and the next one carries the latest state.
   bool _sending = false;
   bool _sendChosen = false;
   bool _sendPlaces = false;
@@ -164,21 +167,52 @@ class _PlacesMapState extends State<PlacesMap>
   }
 
   /// Springs [id] up to stand chosen, and lets the pin chosen before settle.
-  void _choose(String? id, String? was) {
+  Future<void> _choose(String? id, String? was) async {
+    final List<String> moving = <String>[];
     if (was != null && was != id) {
-      final _Lift? old = _lifts[was];
-      if (old != null) old.to(0, _now);
-    }
-    if (id != null) {
-      (_lifts[id] ??= _Lift()).to(1, _now);
-    }
-    if (_still) {
-      _lifts.removeWhere((String _, _Lift l) => l.target == 0);
-      for (final _Lift l in _lifts.values) {
-        l.settle();
+      final bool up = _raised.remove(was) || _floats.containsKey(was);
+      if (up) {
+        (_floats[was] ??= _Float(1)).aim(0, _now);
+        moving.add(was);
       }
     }
-    _sendMoving();
+    if (id != null) {
+      _raised.remove(id);
+      (_floats[id] ??= _Float(0)).aim(1, _now);
+      moving.add(id);
+    }
+    if (_still) {
+      _floats.clear();
+      if (id != null) _raised.add(id);
+      _sendChosen = _sendPlaces = true;
+      _flush();
+      setState(() {});
+      return;
+    }
+    // Where the pins stand on screen first, so the map hides each one only
+    // once Flutter can draw it in its place.
+    await _locate(moving);
+    if (!mounted) return;
+    _sendChosen = _sendPlaces = true;
+    _flush();
+    if (!_ticker.isActive) _ticker.start();
+  }
+
+  Future<void> _locate(List<String> ids) async {
+    final MapLibreMapController? map = _map;
+    final List<Place> places = <Place>[
+      for (final String id in ids) ..._p.places.where((Place p) => p.id == id),
+    ];
+    if (map == null || places.isEmpty) return;
+    final List<Point<num>> at = await map.toScreenLocationBatch(<LatLng>[
+      for (final Place p in places) LatLng(p.latitude, p.longitude),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      for (final (int i, Place p) in places.indexed) {
+        _floats[p.id]?.at = Offset(at[i].x.toDouble(), at[i].y.toDouble());
+      }
+    });
   }
 
   void _hideOthers(bool hide) {
@@ -193,16 +227,7 @@ class _PlacesMapState extends State<PlacesMap>
       _flush();
       return;
     }
-    _sendMoving();
-  }
-
-  void _sendMoving() {
-    final bool moving =
-        _lifts.values.any((_Lift l) => !l.done) || _others != _othersTo;
-    if (moving && !_ticker.isActive) _ticker.start();
-    _sendChosen = true;
-    _sendPlaces = true;
-    _flush();
+    if (!_ticker.isActive) _ticker.start();
   }
 
   Future<void> _flush() async {
@@ -228,18 +253,18 @@ class _PlacesMapState extends State<PlacesMap>
 
   void _tick(Duration now) {
     _now = now;
-    final MapLibreMapController? map = _map;
-    if (map == null || !mounted) return;
+    if (_map == null || !mounted) return;
     bool moving = false;
-    for (final _Lift l in _lifts.values) {
-      l.at(now);
-      moving |= !l.done;
+    for (final MapEntry<String, _Float> e in _floats.entries) {
+      final _Float f = e.value;
+      if (f.landing) continue;
+      f.lift.at(now);
+      if (f.lift.done) {
+        _rest(e.key, f);
+      } else {
+        moving = true;
+      }
     }
-    // Settled pins that went back to rest return to the main layer.
-    final int before = _lifts.length;
-    _lifts.removeWhere((String _, _Lift l) => l.done && l.target == 0);
-    _sendChosen = true;
-    if (_lifts.length != before) _sendPlaces = true;
     if (_others != _othersTo) {
       final Duration start = _othersStart ??= now;
       final double t = ((now - start).inMicroseconds / 320000).clamp(0, 1);
@@ -252,7 +277,20 @@ class _PlacesMapState extends State<PlacesMap>
       moving |= _others != _othersTo;
     }
     _flush();
+    setState(() {});
     if (!moving) _ticker.stop();
+  }
+
+  /// A pin that has come to rest goes back to the map. Flutter's copy stays
+  /// a moment longer, on top of the map's, so the hand-over shows no gap.
+  void _rest(String id, _Float f) {
+    f.landing = true;
+    if (f.lift.target == 1) _raised.add(id);
+    _sendChosen = _sendPlaces = true;
+    Timer(const Duration(milliseconds: 220), () {
+      if (!mounted || _floats[id] != f || !f.landing) return;
+      setState(() => _floats.remove(id));
+    });
   }
 
   @override
@@ -262,7 +300,17 @@ class _PlacesMapState extends State<PlacesMap>
     final MapProps was = old.props;
     final MapLibreMapController map = _map!;
     if (was.selectedId != _p.selectedId) {
-      _choose(_p.selectedId, was.selectedId);
+      final String? id = _p.selectedId;
+      final String? before = was.selectedId;
+      if (was.focusTick != _p.focusTick && !_still) {
+        // Flying in, the pin's spot on screen is known once the camera
+        // has stopped.
+        Timer(const Duration(milliseconds: 1200), () {
+          if (mounted && _p.selectedId == id) _choose(id, before);
+        });
+      } else {
+        _choose(id, before);
+      }
     } else if (was.places != _p.places) {
       map.setGeoJsonSource('places', _placesJson());
       map.setGeoJsonSource('chosen', _chosenJson());
@@ -394,7 +442,7 @@ class _PlacesMapState extends State<PlacesMap>
     _others = _othersTo = _p.aloneId == null ? 1 : 0;
     await map.setLayerProperties('place-pins', _pinLayer());
     if (_p.selectedId case final String id) {
-      _lifts[id] = _Lift()..settleAt(1);
+      _raised.add(id);
       await map.setGeoJsonSource('places', _placesJson());
       await map.setGeoJsonSource('chosen', _chosenJson());
     }
@@ -548,26 +596,23 @@ class _PlacesMapState extends State<PlacesMap>
         (latitude: p.latitude, longitude: p.longitude),
         <String, dynamic>{
           ..._placeProps(i, p),
-          // A pin on the move is drawn on the chosen layer instead.
-          'moving': _lifts.containsKey(p.id),
+          // A raised pin is drawn on the chosen layer, a springing one by
+          // Flutter over the map.
+          'raised': _raised.contains(p.id),
+          'floating': _floats.containsKey(p.id) && !_raised.contains(p.id),
           'alone': p.id == _p.aloneId,
         },
         p.id,
       ),
   ]);
 
-  /// The pins on the move, each with how far it stands up: 0 at rest, 1
-  /// chosen, a little past 1 as the spring overshoots.
+  /// The chosen pins at rest, which stand lifted.
   Map<String, dynamic> _chosenJson() => _collection(<Map<String, dynamic>>[
     for (final (int i, Place p) in _p.places.indexed)
-      if (_lifts[p.id] case final _Lift lift)
+      if (_raised.contains(p.id))
         _point(
           (latitude: p.latitude, longitude: p.longitude),
-          <String, dynamic>{
-            ..._placeProps(i, p),
-            'lift': lift.value,
-            'rising': lift.target == 1,
-          },
+          _placeProps(i, p),
           p.id,
         ),
   ]);
@@ -588,7 +633,11 @@ class _PlacesMapState extends State<PlacesMap>
       ],
       iconOpacity: <Object>[
         'case',
-        <Object>['get', 'moving'],
+        <Object>[
+          'any',
+          <Object>['get', 'raised'],
+          <Object>['get', 'floating'],
+        ],
         0.0,
         <Object>['get', 'alone'],
         1.0,
@@ -596,7 +645,7 @@ class _PlacesMapState extends State<PlacesMap>
       ],
       textOpacity: <Object>[
         'case',
-        <Object>['get', 'moving'],
+        <Object>['get', 'raised'],
         0.0,
         <Object>['get', 'alone'],
         1.0,
@@ -615,38 +664,15 @@ class _PlacesMapState extends State<PlacesMap>
     );
   }
 
-  /// The pins on the move, standing taller and lifted off the map by their
-  /// spring. A rising pin keeps its name in full; a pin settling back fades
-  /// its name with its height, so it does not cover the rising one's.
+  /// The chosen pins, standing taller and lifted off the map, as Flutter's
+  /// copy ends its spring.
   SymbolLayerProperties _chosenLayer() => SymbolLayerProperties(
     iconImage: <Object>['get', 'icon'],
     iconAnchor: 'bottom',
     iconAllowOverlap: true,
     iconIgnorePlacement: true,
-    iconSize: <Object>[
-      'interpolate',
-      <Object>['linear'],
-      <Object>['get', 'lift'],
-      0,
-      1.0,
-      1.5,
-      1.375,
-    ],
-    iconOffset: <Object>[
-      'interpolate',
-      <Object>['linear'],
-      <Object>['get', 'lift'],
-      0,
-      <Object>[
-        'literal',
-        <double>[0, 0],
-      ],
-      1.5,
-      <Object>[
-        'literal',
-        <double>[0, -9],
-      ],
-    ],
+    iconSize: _raisedScale,
+    iconOffset: <double>[0, -_raisedLift / _raisedScale],
     textField: <Object>['get', 'name'],
     textFont: <String>['Noto Sans Bold'],
     textSize: 12.5,
@@ -654,24 +680,43 @@ class _PlacesMapState extends State<PlacesMap>
     textOffset: <double>[0, 0.35],
     textMaxWidth: 9,
     textAllowOverlap: true,
-    textOpacity: <Object>[
-      'case',
-      <Object>['get', 'rising'],
-      1.0,
-      <Object>[
-        'interpolate',
-        <Object>['linear'],
-        <Object>['get', 'lift'],
-        0.3,
-        0.0,
-        0.8,
-        1.0,
-      ],
-    ],
     textColor: _hex(AppColors.ink),
     textHaloColor: _hex(AppColors.surface),
     textHaloWidth: 1.6,
   );
+
+  /// How much taller a chosen pin stands, and how far it lifts, in logical
+  /// pixels: the same for the map's copy and Flutter's.
+  static const double _raisedScale = 1.25;
+  static const double _raisedLift = 7.5;
+
+  /// A springing pin, drawn by Flutter where the map would draw it.
+  Widget _floatingPin(String id, _Float f) {
+    final Offset? at = f.at;
+    final int i = _p.places.indexWhere((Place p) => p.id == id);
+    if (at == null || i < 0) return const SizedBox.shrink();
+    final Size size = PinImages.placeSize;
+    final double v = f.lift.value;
+    return Positioned(
+      left: at.dx - size.width / 2,
+      top: at.dy - size.height,
+      width: size.width,
+      height: size.height,
+      child: IgnorePointer(
+        child: Transform.translate(
+          offset: Offset(0, -_raisedLift * v),
+          child: Transform.scale(
+            scale: 1 + (_raisedScale - 1) * v,
+            alignment: Alignment.bottomCenter,
+            child: CustomPaint(
+              size: size,
+              painter: PinPainter(wedgeColorFor(i, _p.places.length).fill),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   /// The dropped pin at [at], at a [stage] of its drop: 0 resting, 1 lifted,
   /// 2 just past the ground.
@@ -698,7 +743,7 @@ class _PlacesMapState extends State<PlacesMap>
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints c) {
         _width = c.maxWidth;
-        return MapLibreMap(
+        final Widget map = MapLibreMap(
           styleString: mapStyleUrl,
           initialCameraPosition: _home(),
           onMapCreated: (MapLibreMapController map) {
@@ -709,6 +754,17 @@ class _PlacesMapState extends State<PlacesMap>
           onStyleLoadedCallback: _styleLoaded,
           onMapClick: (_, _) => _p.onMapTap(),
           compassEnabled: false,
+          // MapLibre holds back a single tap until the double-tap timeout,
+          // to see whether a second tap makes it a zoom, so every pin tap
+          // waited for it. Without double-tap zoom the plugin reports a tap
+          // on touch-up (MapLibreMapController.reportsTapsOnTouchUp, and
+          // MapLibreMapBuilder applies this on Android despite the web-only
+          // note). Pinch still zooms.
+          doubleClickZoomEnabled: false,
+          // With transitions on, MapLibre places symbols at most once every
+          // 300 ms and fades them in. Off, a pin Flutter hands back to the
+          // map shows the frame its data arrives, with no fade.
+          symbolPlacementTransitionsEnabled: false,
           // The credit OpenStreetMap asks for when others see the map; the
           // app is for its owner alone (docs/decisions.md 018).
           attributionEnabled: false,
@@ -722,8 +778,32 @@ class _PlacesMapState extends State<PlacesMap>
             pulseColor: _youBlue,
           ),
         );
+        return Stack(
+          children: <Widget>[
+            Positioned.fill(child: map),
+            for (final MapEntry<String, _Float> e in _floats.entries)
+              _floatingPin(e.key, e.value),
+          ],
+        );
       },
     );
+  }
+}
+
+/// A pin Flutter animates over the map: its spring, and where it stands on
+/// screen once known.
+class _Float {
+  _Float(double from) : lift = _Lift()..settleAt(from);
+
+  final _Lift lift;
+  Offset? at;
+
+  /// It has come to rest and is going back to the map.
+  bool landing = false;
+
+  void aim(double to, Duration now) {
+    landing = false;
+    lift.to(to, now);
   }
 }
 

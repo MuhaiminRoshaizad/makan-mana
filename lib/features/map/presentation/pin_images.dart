@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/rendering.dart' show CustomPainter;
+
 import '../../../core/theme/app_tokens.dart';
 
 /// The map's pins, drawn once as images for MapLibre: a round head on a
@@ -21,6 +23,20 @@ abstract final class PinImages {
   }) async {
     final ui.PictureRecorder recorder = ui.PictureRecorder();
     final ui.Canvas c = ui.Canvas(recorder)..scale(pixelRatio);
+    paint(c, size, head);
+    final ui.Image image = await recorder.endRecording().toImage(
+      (size.width * pixelRatio).ceil(),
+      (size.height * pixelRatio).ceil(),
+    );
+    final ByteData? bytes = await image.toByteData(
+      format: ui.ImageByteFormat.png,
+    );
+    image.dispose();
+    return bytes!.buffer.asUint8List();
+  }
+
+  /// Paints a pin [size] logical pixels big, standing on the bottom edge.
+  static void paint(ui.Canvas c, ui.Size size, ui.Color head) {
     final double w = size.width;
     final double h = size.height;
     final double r = w * 0.36;
@@ -63,14 +79,20 @@ abstract final class PinImages {
         ..strokeWidth = w * 0.08,
     );
     c.drawCircle(centre, r * 0.32, ui.Paint()..color = AppColors.surface);
-    final ui.Image image = await recorder.endRecording().toImage(
-      (w * pixelRatio).ceil(),
-      (h * pixelRatio).ceil(),
-    );
-    final ByteData? bytes = await image.toByteData(
-      format: ui.ImageByteFormat.png,
-    );
-    image.dispose();
-    return bytes!.buffer.asUint8List();
   }
+}
+
+/// The place pin as a Flutter widget's painter, the same drawing as the
+/// map's pin images, for a pin Flutter animates over the map.
+class PinPainter extends CustomPainter {
+  const PinPainter(this.head);
+
+  final ui.Color head;
+
+  @override
+  void paint(ui.Canvas canvas, ui.Size size) =>
+      PinImages.paint(canvas, size, head);
+
+  @override
+  bool shouldRepaint(PinPainter old) => old.head != head;
 }
