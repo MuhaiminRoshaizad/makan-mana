@@ -563,7 +563,11 @@ class _PlacesMapState extends State<PlacesMap>
       if (_lifts[p.id] case final _Lift lift)
         _point(
           (latitude: p.latitude, longitude: p.longitude),
-          <String, dynamic>{..._placeProps(i, p), 'lift': lift.value},
+          <String, dynamic>{
+            ..._placeProps(i, p),
+            'lift': lift.value,
+            'rising': lift.target == 1,
+          },
           p.id,
         ),
   ]);
@@ -612,8 +616,8 @@ class _PlacesMapState extends State<PlacesMap>
   }
 
   /// The pins on the move, standing taller and lifted off the map by their
-  /// spring. A name shows with its pin's height, so a pin settling back
-  /// does not cover the name of the one rising.
+  /// spring. A rising pin keeps its name in full; a pin settling back fades
+  /// its name with its height, so it does not cover the rising one's.
   SymbolLayerProperties _chosenLayer() => SymbolLayerProperties(
     iconImage: <Object>['get', 'icon'],
     iconAnchor: 'bottom',
@@ -651,13 +655,18 @@ class _PlacesMapState extends State<PlacesMap>
     textMaxWidth: 9,
     textAllowOverlap: true,
     textOpacity: <Object>[
-      'interpolate',
-      <Object>['linear'],
-      <Object>['get', 'lift'],
-      0.3,
-      0.0,
-      0.8,
+      'case',
+      <Object>['get', 'rising'],
       1.0,
+      <Object>[
+        'interpolate',
+        <Object>['linear'],
+        <Object>['get', 'lift'],
+        0.3,
+        0.0,
+        0.8,
+        1.0,
+      ],
     ],
     textColor: _hex(AppColors.ink),
     textHaloColor: _hex(AppColors.surface),
