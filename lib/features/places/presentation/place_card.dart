@@ -396,14 +396,12 @@ class _PlaceCardHostState extends ConsumerState<PlaceCardHost>
                                 mainAxisSize: MainAxisSize.min,
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: <Widget>[
-                                  Padding(
+                                  PlaceSummary(
+                                    place: place,
+                                    won: widget.won,
+                                    compact: true,
                                     // Room for Close at the top right.
-                                    padding: const EdgeInsets.only(right: 40),
-                                    child: PlaceSummary(
-                                      place: place,
-                                      won: widget.won,
-                                      compact: true,
-                                    ),
+                                    nameEndGap: 40,
                                   ),
                                   const SizedBox(height: AppSpacing.lg),
                                   PlaceActions(

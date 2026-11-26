@@ -81,11 +81,16 @@ class PlaceSummary extends ConsumerWidget {
     required this.place,
     required this.won,
     this.compact = false,
+    this.nameEndGap = 0,
   });
 
   final Place place;
   final bool won;
   final bool compact;
+
+  /// Room kept clear at the end of the name and the line above it, as for
+  /// a Close button in the corner.
+  final double nameEndGap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -96,28 +101,34 @@ class PlaceSummary extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         if (won) ...<Widget>[
-          Text(
-            'Today you are eating at',
-            style: TextStyle(
-              fontSize: compact ? 13 : 15,
-              fontWeight: FontWeight.w600,
-              color: AppColors.muted,
+          Padding(
+            padding: EdgeInsets.only(right: nameEndGap),
+            child: Text(
+              'Today you are eating at',
+              style: TextStyle(
+                fontSize: compact ? 13 : 15,
+                fontWeight: FontWeight.w600,
+                color: AppColors.muted,
+              ),
             ),
           ),
           const SizedBox(height: AppSpacing.xs),
         ],
-        Semantics(
-          header: true,
-          child: Text(
-            place.name,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: compact ? 21 : 28,
-              height: 1.2,
-              fontWeight: FontWeight.w800,
-              letterSpacing: compact ? -0.2 : -0.4,
-              color: AppColors.ink,
+        Padding(
+          padding: EdgeInsets.only(right: nameEndGap),
+          child: Semantics(
+            header: true,
+            child: Text(
+              place.name,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: compact ? 21 : 28,
+                height: 1.2,
+                fontWeight: FontWeight.w800,
+                letterSpacing: compact ? -0.2 : -0.4,
+                color: AppColors.ink,
+              ),
             ),
           ),
         ),
