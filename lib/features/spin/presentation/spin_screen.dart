@@ -16,7 +16,7 @@ import '../../places/domain/place.dart';
 import '../../places/domain/place_filters.dart';
 import '../../places/presentation/filters_button.dart';
 import '../../places/presentation/filters_sheet.dart';
-import '../../places/presentation/place_sheet.dart';
+import '../../places/presentation/place_card.dart';
 import '../../places/presentation/places_providers.dart';
 import 'spin_wheel.dart';
 import 'wheel_painter.dart';
@@ -50,6 +50,9 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
   /// The result waits while the winning wedge flashes.
   Timer? _result;
 
+  /// The place the wheel landed on, shown on its card.
+  Place? _won;
+
   @override
   void initState() {
     super.initState();
@@ -69,24 +72,38 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
         ? Duration.zero
         : const Duration(milliseconds: 650);
     _result = Timer(flash, () {
-      if (!mounted) return;
-      showPlaceSheet(
-        context,
-        place: place,
-        onSeeOnMap: () {
-          Navigator.of(context, rootNavigator: true).pop();
-          ref.read(aloneOnMapProvider.notifier).show(place.id);
-        },
-        onSpinAgain: () {
-          Navigator.of(context, rootNavigator: true).pop();
-          _wheel.currentState?.spin();
-        },
-      );
+      if (mounted) setState(() => _won = place);
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final Place? won = _won;
+    return Stack(
+      children: <Widget>[
+        Positioned.fill(child: _body(context)),
+        Positioned.fill(
+          child: PlaceCardHost(
+            place: won,
+            won: true,
+            onClose: () => setState(() => _won = null),
+            onSeeOnMap: won == null
+                ? null
+                : () {
+                    setState(() => _won = null);
+                    ref.read(aloneOnMapProvider.notifier).show(won.id);
+                  },
+            onSpinAgain: () {
+              setState(() => _won = null);
+              _wheel.currentState?.spin();
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _body(BuildContext context) {
     final AsyncValue<List<Place>> places = ref.watch(wheelPlacesProvider);
     // One button for the distance and every filter, since both open the
     // same sheet. The tab needs no title: the tab bar names it.
@@ -123,7 +140,10 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
           labelsEndAbove: _ArcLayout.labelsEndAbove(context),
           onLanded: (int i) => _landed(list[i]),
           onCurrent: (int i) => setState(() => _current = i),
-          onSpinning: (bool on) => setState(() => _spinning = on),
+          onSpinning: (bool on) => setState(() {
+            _spinning = on;
+            if (on) _won = null;
+          }),
         ),
         spinButton: SpinButton(
           onPressed: _spinning ? null : () => _wheel.currentState?.spin(),

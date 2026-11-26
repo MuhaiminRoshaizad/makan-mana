@@ -4,48 +4,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/format/formatters.dart';
 import '../../../core/theme/app_tokens.dart';
-import '../../../core/widgets/app_sheet.dart';
 import '../domain/place.dart';
 import '../domain/review.dart';
 import 'hours_text.dart';
 import 'maps_link.dart';
 import 'places_providers.dart';
 
-/// Opens [PlaceSheet] for [place]. It may grow past the usual 9/16 cap
-/// and scrolls, so large system text never cuts off its buttons.
-Future<void> showPlaceSheet(
-  BuildContext context, {
-  required Place place,
-  bool won = true,
-  VoidCallback? onSeeOnMap,
-  VoidCallback? onSpinAgain,
-}) => showAppSheet<void>(
-  context,
-  scrollControlled: true,
-  builder: (_) => PlaceSheet(
-    place: place,
-    won: won,
-    onSeeOnMap: onSeeOnMap,
-    onSpinAgain: onSpinAgain,
-  ),
-);
-
-/// A place in full, on the wheel's result and on the map alike: what it
-/// is, how it rates, how far it is and when it opens, the ways onward, and
-/// its reviews.
-class PlaceSheet extends ConsumerWidget {
-  const PlaceSheet({
+/// The ways onward from a place: Google Maps first, then, where given,
+/// seeing it alone on the map and spinning again.
+class PlaceActions extends ConsumerWidget {
+  const PlaceActions({
     super.key,
     required this.place,
-    this.won = true,
     this.onSeeOnMap,
     this.onSpinAgain,
   });
 
   final Place place;
-
-  /// A spin's winner, so the sheet says so.
-  final bool won;
 
   /// Shows the place alone on the map; null leaves the button out.
   final VoidCallback? onSeeOnMap;
@@ -57,56 +32,43 @@ class PlaceSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final VoidCallback? seeOnMap = onSeeOnMap;
     final VoidCallback? spinAgain = onSpinAgain;
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.xl,
-          0,
-          AppSpacing.xl,
-          AppSpacing.lg,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        FilledButton(
+          onPressed: () => openInMaps(context, ref, place),
+          child: const Text('Open in Google Maps'),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            PlaceSummary(place: place, won: won),
-            const SizedBox(height: AppSpacing.xxl),
-            FilledButton(
-              onPressed: () => openInMaps(context, ref, place),
-              child: const Text('Open in Google Maps'),
-            ),
-            if (seeOnMap != null) ...<Widget>[
-              const SizedBox(height: AppSpacing.sm),
-              OutlinedButton(
-                onPressed: seeOnMap,
-                child: const Text('See it on the map'),
-              ),
-            ],
-            if (spinAgain != null) ...<Widget>[
-              const SizedBox(height: AppSpacing.sm),
-              if (seeOnMap != null)
-                TextButton(
-                  onPressed: spinAgain,
-                  style: TextButton.styleFrom(
-                    minimumSize: const Size(48, 48),
-                    textStyle: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      decoration: TextDecoration.underline,
-                    ),
-                  ),
-                  child: const Text('Spin again'),
-                )
-              else
-                OutlinedButton(
-                  onPressed: spinAgain,
-                  child: const Text('Spin again'),
+        if (seeOnMap != null) ...<Widget>[
+          const SizedBox(height: AppSpacing.sm),
+          OutlinedButton(
+            onPressed: seeOnMap,
+            child: const Text('See it on the map'),
+          ),
+        ],
+        if (spinAgain != null) ...<Widget>[
+          const SizedBox(height: AppSpacing.sm),
+          if (seeOnMap != null)
+            TextButton(
+              onPressed: spinAgain,
+              style: TextButton.styleFrom(
+                minimumSize: const Size(48, 48),
+                textStyle: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  decoration: TextDecoration.underline,
                 ),
-            ],
-            PlaceReviews(place: place),
-          ],
-        ),
-      ),
+              ),
+              child: const Text('Spin again'),
+            )
+          else
+            OutlinedButton(
+              onPressed: spinAgain,
+              child: const Text('Spin again'),
+            ),
+        ],
+      ],
     );
   }
 }

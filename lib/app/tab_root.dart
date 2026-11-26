@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/widgets/tab_back.dart';
 import '../core/widgets/toast.dart';
 
 /// Wraps each tab's first page, so Back there follows Android's rule for
@@ -13,17 +14,25 @@ import '../core/widgets/toast.dart';
 /// It sits on the tab's page, not on the shell around the tabs: on Android
 /// 14 and later each tab's navigator tells Android for itself whether it
 /// handles Back, and a guard on the shell is outvoted.
-class TabRoot extends ConsumerWidget {
+class TabRoot extends ConsumerStatefulWidget {
   const TabRoot({super.key, required this.child});
 
   final Widget child;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TabRoot> createState() => _TabRootState();
+}
+
+class _TabRootState extends ConsumerState<TabRoot> {
+  /// Something on the tab, such as a place card, may take Back first.
+  final TabBack _back = TabBack();
+
+  @override
+  Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (bool didPop, _) {
-        if (didPop) return;
+        if (didPop || _back.handle()) return;
         final StatefulNavigationShellState? shell =
             StatefulNavigationShell.maybeOf(context);
         if (shell == null) return;
@@ -31,7 +40,7 @@ class TabRoot extends ConsumerWidget {
             .read(backToCloseProvider)
             .back(context, current: shell.currentIndex, goTo: shell.goBranch);
       },
-      child: child,
+      child: TabBackScope(back: _back, child: widget.child),
     );
   }
 }

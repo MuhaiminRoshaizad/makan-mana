@@ -331,23 +331,28 @@ tests and a web build.
 
 ## 022: One place card for the wheel and the map
 
-**Decided:** a place shows the same way wherever it comes from. The sheet
-after a wheel spin and the card over the map are built from the same parts:
-its name, three figures (rating, reviews, distance) and its hours, with the
-reviews in the full sheet. On the map the card sits over the map with a
-handle, and a tap or a pull upwards opens the full sheet, the same one the
-wheel shows. The wheel's sheet adds See it on the map, which opens the Map
-tab with every other place put away, flies in on the winner and shows its
-card; Show all, or closing the card, brings the others back. Pins move on
-the app's spring (`AppMotion.spring`): a chosen pin springs up and settles,
-and so does each pin a map spin hops across. Chosen by the user from a demo
-with two options for a tapped pin; they took the card that opens the sheet
-over the full sheet at once (demo: claude.ai/artifact/7QH8fRugdYQGTwPFgHL9Hp).
+**Decided:** a place shows the same way wherever it comes from. After a
+wheel spin, and on a tapped pin, a card rises over the tab: its name, three
+figures (rating, reviews, distance), its hours and its buttons. Pulled up,
+or tapped, the card widens to the screen's edges and rises into the full
+sheet with the reviews, and the tab bar slides away under it; pulled down
+it shrinks back, and further down it goes. Tapping another pin changes what
+the card shows without it leaving. The wheel's card adds See it on the map,
+which opens the Map tab with every other place put away, flies in on the
+winner and shows its card; Show all, or closing the card, brings the others
+back. Pins move on the app's spring (`AppMotion.spring`): a chosen pin
+springs up and settles, and so does each pin a map spin hops across. Chosen
+by the user from a demo with two options for a tapped pin; they took the
+card that grows into the sheet over the full sheet at once (demo:
+claude.ai/artifact/7QH8fRugdYQGTwPFgHL9Hp).
 
 **Why:** the wheel showed a full sheet and the map a smaller card with
 different figures and no reviews, so the two tabs read as two apps. A pin
 jumped to its chosen size in one frame, with no motion at all.
 
-**Costs:** the card does not grow into the sheet as in the demo: the sheet
-opens over it, from the bottom, as every sheet in the app does, since the
-floating tab bar sits above anything a tab draws.
+**Costs:** the card lives inside its tab, not on a route, so Back reaches
+it through the tab's own guard (`TabBack`): Back shrinks the full sheet,
+then closes the card, before the tab's Back rules apply. A pin on the move
+is drawn on its own map layer, and only one update to the map is in flight
+at a time; sending one every frame froze the map for about 400 ms after a
+tap on a Pixel 9 Pro.

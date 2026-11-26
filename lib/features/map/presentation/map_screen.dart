@@ -3,7 +3,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
-import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -18,8 +17,7 @@ import '../../places/domain/place.dart';
 import '../../places/domain/place_filters.dart';
 import '../../places/domain/places_repository.dart';
 import '../../places/presentation/filters_button.dart';
-import '../../places/presentation/maps_link.dart';
-import '../../places/presentation/place_sheet.dart';
+import '../../places/presentation/place_card.dart';
 import '../../places/presentation/places_providers.dart';
 import 'places_map.dart';
 
@@ -50,6 +48,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   int _focusTick = 0;
   LatLon? _ringAt;
   int _ringTick = 0;
+
+  /// The place whose card is up or still leaving, so Spin waits for it.
+  String? _cardFor;
 
   /// The place sent from the wheel that the map has flown in on, so it
   /// does so once per sending.
@@ -205,6 +206,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     } else if (sentId == null && _aloneShown != null) {
       _aloneShown = null;
     }
+    if (selected != null) _cardFor = selected.id;
     final EdgeInsets safe = MediaQuery.paddingOf(context);
     final double clearance = AppNavMetrics.clearance(safe.bottom);
     final SearchArea? here = area.value;
@@ -379,23 +381,29 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               right: AppSpacing.lg,
               bottom: clearance,
               child: _HandOver(
-                child: selected != null
-                    ? _PlaceCard(
-                        key: ValueKey<String>('card ${selected.id} $_won'),
-                        place: selected,
-                        won: _won,
-                        onClose: () => _select(null),
-                        onSpinAgain: () {
-                          _select(null);
-                          _spin(list);
-                        },
-                      )
+                // Spin comes back only once the card has gone.
+                child: selected != null || _cardFor != null
+                    ? null
                     : list.isEmpty || here == null
                     ? null
                     : SpinButton(
                         key: const ValueKey<String>('spin'),
                         onPressed: _spinning ? null : () => _spin(list),
                       ),
+              ),
+            ),
+            Positioned.fill(
+              child: PlaceCardHost(
+                place: selected,
+                won: _won,
+                onClose: () => _select(null),
+                onSpinAgain: _won
+                    ? () {
+                        _select(null);
+                        _spin(list);
+                      }
+                    : null,
+                onGone: () => setState(() => _cardFor = null),
               ),
             ),
           ],
@@ -676,9 +684,8 @@ class _AloneBar extends StatelessWidget {
   }
 }
 
-/// Shows one thing at the foot of the map, and hands over to the next only
-/// after the first has gone: the card slides away, then Spin pops in, so
-/// the two never cross.
+/// Brings Spin in and out at the foot of the map: it pops in past its size
+/// a little and settles, and shrinks away.
 class _HandOver extends StatefulWidget {
   const _HandOver({required this.child});
 
@@ -717,7 +724,6 @@ class _HandOverState extends State<_HandOver>
       _a.value = next == null ? 0 : 1;
       return;
     }
-    // Out first, then in.
     _a.reverse().then((_) {
       if (!mounted) return;
       setState(() => _shown = widget.child);
@@ -735,22 +741,15 @@ class _HandOverState extends State<_HandOver>
   Widget build(BuildContext context) {
     final Widget? shown = _shown;
     if (shown == null) return const SizedBox.shrink();
-    final bool card = shown is _PlaceCard;
     return AnimatedBuilder(
       animation: _a,
       builder: (BuildContext context, Widget? child) {
-        // Both arrive past their place a little and settle, as the pins do.
         final double t = _a.status == AnimationStatus.reverse
             ? Curves.easeIn.transform(_a.value)
             : const Cubic(0.3, 1.4, 0.5, 1).transform(_a.value);
         return Opacity(
           opacity: _a.value.clamp(0, 1),
-          child: card
-              ? Transform.translate(
-                  offset: Offset(0, 40 * (1 - t)),
-                  child: child,
-                )
-              : Transform.scale(scale: 0.8 + 0.2 * t, child: child),
+          child: Transform.scale(scale: 0.8 + 0.2 * t, child: child),
         );
       },
       child: Center(child: shown),
@@ -807,159 +806,6 @@ class _RoundButton extends StatelessWidget {
                   ),
                   child: child,
                 ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The chosen place over the map, laid out as the top of its sheet. A tap,
-/// or a pull upwards, opens the whole sheet with the reviews; the card
-/// follows the finger a little and springs back (docs/decisions.md 022).
-class _PlaceCard extends ConsumerStatefulWidget {
-  const _PlaceCard({
-    super.key,
-    required this.place,
-    required this.won,
-    required this.onClose,
-    required this.onSpinAgain,
-  });
-
-  final Place place;
-
-  /// A spin's winner, so the card says so and offers another spin.
-  final bool won;
-  final VoidCallback onClose;
-  final VoidCallback onSpinAgain;
-
-  @override
-  ConsumerState<_PlaceCard> createState() => _PlaceCardState();
-}
-
-class _PlaceCardState extends ConsumerState<_PlaceCard>
-    with SingleTickerProviderStateMixin {
-  /// How far the card has been pulled up, in logical pixels.
-  late final AnimationController _pull = AnimationController.unbounded(
-    vsync: this,
-  );
-
-  /// A pull this far, or a flick upwards, opens the sheet.
-  static const double _opensAt = 56;
-
-  @override
-  void dispose() {
-    _pull.dispose();
-    super.dispose();
-  }
-
-  void _open() {
-    showPlaceSheet(
-      context,
-      place: widget.place,
-      won: widget.won,
-      onSpinAgain: widget.won
-          ? () {
-              Navigator.of(context, rootNavigator: true).pop();
-              widget.onSpinAgain();
-            }
-          : null,
-    );
-  }
-
-  void _drag(DragUpdateDetails d) {
-    // Upwards it follows the finger, slowing as it goes; downwards it
-    // barely moves.
-    final double up = math.max(0, _pull.value - d.delta.dy);
-    _pull.value = up < 40 ? up : 40 + (up - 40) * 0.35;
-  }
-
-  void _release(DragEndDetails d) {
-    final bool opens =
-        _pull.value >= _opensAt * 0.5 || (d.primaryVelocity ?? 0) < -500;
-    if (opens) _open();
-    if (MediaQuery.disableAnimationsOf(context)) {
-      _pull.value = 0;
-      return;
-    }
-    _pull.animateWith(SpringSimulation(AppMotion.spring, _pull.value, 0, 0));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _pull,
-      builder: (BuildContext context, Widget? child) =>
-          Transform.translate(offset: Offset(0, -_pull.value), child: child),
-      child: Semantics(
-        container: true,
-        button: true,
-        label: 'Show more about ${widget.place.name}',
-        onTap: _open,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: _open,
-          onVerticalDragUpdate: _drag,
-          onVerticalDragEnd: _release,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: AppShadows.float,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.sm,
-                AppSpacing.xs,
-                AppSpacing.lg,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  // The handle says the card can be pulled up.
-                  Center(
-                    child: Container(
-                      width: 36,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: AppColors.handle,
-                        borderRadius: BorderRadius.circular(3),
-                      ),
-                    ),
-                  ),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: AppSpacing.sm),
-                          child: PlaceSummary(
-                            place: widget.place,
-                            won: widget.won,
-                            compact: true,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: widget.onClose,
-                        tooltip: 'Close',
-                        icon: const Icon(CupertinoIcons.xmark, size: 20),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Padding(
-                    padding: const EdgeInsets.only(right: AppSpacing.md),
-                    child: FilledButton(
-                      onPressed: () => openInMaps(context, ref, widget.place),
-                      child: const Text('Open in Google Maps'),
-                    ),
-                  ),
-                ],
               ),
             ),
           ),

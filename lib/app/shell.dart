@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/theme/app_tokens.dart';
+import '../core/widgets/nav_cover.dart';
 import '../features/places/presentation/places_providers.dart';
 import 'floating_nav.dart';
 import 'tab_root.dart';
@@ -38,10 +39,29 @@ class AppShell extends ConsumerWidget {
             right: 0,
             bottom:
                 MediaQuery.paddingOf(context).bottom + AppNavMetrics.bottomGap,
-            child: Center(
-              child: FloatingNav(
-                index: shell.currentIndex,
-                onSelect: (int i) => _select(ref, i),
+            // A place card growing into its sheet pushes the bar away.
+            child: ValueListenableBuilder<double>(
+              valueListenable: ref.watch(navCoverProvider),
+              builder: (BuildContext context, double cover, Widget? bar) =>
+                  IgnorePointer(
+                    ignoring: cover > 0.5,
+                    child: Transform.translate(
+                      offset: Offset(
+                        0,
+                        cover *
+                            (AppNavMetrics.height +
+                                AppNavMetrics.bottomGap +
+                                MediaQuery.paddingOf(context).bottom +
+                                AppSpacing.lg),
+                      ),
+                      child: bar,
+                    ),
+                  ),
+              child: Center(
+                child: FloatingNav(
+                  index: shell.currentIndex,
+                  onSelect: (int i) => _select(ref, i),
+                ),
               ),
             ),
           ),

@@ -16,6 +16,7 @@ import 'package:makan_mana/features/places/domain/place.dart';
 import 'package:makan_mana/features/places/domain/place_filters.dart';
 import 'package:makan_mana/features/places/domain/places_repository.dart';
 import 'package:makan_mana/features/places/presentation/maps_link.dart';
+import 'package:makan_mana/core/widgets/nav_cover.dart';
 import 'package:makan_mana/features/places/presentation/place_sheet.dart';
 import 'package:makan_mana/features/places/presentation/places_providers.dart';
 
@@ -198,20 +199,48 @@ void main() {
     final Place first = shown!.places.first;
     shown!.onPinTap(first.id);
     await tester.pumpAndSettle();
+    final ValueNotifier<double> cover = container.read(navCoverProvider);
+    final double cardTop = tester.getTopLeft(find.text(first.name)).dy;
     await tester.tap(find.text('Rating'));
     await tester.pumpAndSettle();
-    expect(find.byType(PlaceSheet), findsOneWidget);
-    // A tapped pin is not a spin's winner, so the sheet offers no spin.
-    expect(find.text('Spin again'), findsNothing);
-    Navigator.of(tester.element(find.byType(PlaceSheet))).pop();
-    await tester.pumpAndSettle();
-    expect(find.byType(PlaceSheet), findsNothing);
-    await tester.drag(
-      find.bySemanticsLabel('Show more about ${first.name}'),
-      const Offset(0, -140),
+    // Grown into the sheet: edge to edge, near the top, the bar pushed away.
+    expect(cover.value, 1);
+    expect(
+      tester.getTopLeft(find.text(first.name)).dy,
+      lessThan(cardTop - 300),
     );
+    expect(
+      tester.getRect(find.byType(PlaceSummary)).left,
+      lessThan(AppSpacing.lg + AppSpacing.lg + 1),
+    );
+    // A tapped pin is not a spin's winner, so it offers no spin.
+    expect(find.text('Spin again'), findsNothing);
+    // Pulled down, it is the card again, and the bar comes back.
+    await tester.drag(find.text('Rating'), const Offset(0, 500));
     await tester.pumpAndSettle();
-    expect(find.byType(PlaceSheet), findsOneWidget);
+    expect(cover.value, 0);
+    expect(find.text(first.name), findsOneWidget);
+    await tester.drag(find.text('Rating'), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect(cover.value, 1);
+  });
+
+  testWidgets('tapping another pin changes what the card shows at once, '
+      'without it leaving first', (WidgetTester tester) async {
+    await show(tester);
+    final List<Place> places = shown!.places;
+    shown!.onPinTap(places[0].id);
+    await tester.pumpAndSettle();
+    final Rect card = tester.getRect(find.byType(PlaceSummary));
+    shown!.onPinTap(places[1].id);
+    await tester.pump();
+    await tester.pump(AppMotion.short);
+    expect(find.text(places[1].name), findsOneWidget);
+    // Still up: a shorter place makes a shorter card, but it never left.
+    expect(
+      (tester.getRect(find.byType(PlaceSummary).last).top - card.top).abs(),
+      lessThan(80),
+    );
   });
 
   testWidgets('a place sent from the wheel shows alone: the others are put '

@@ -3,12 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:makan_mana/core/theme/app_theme.dart';
+import 'package:makan_mana/core/widgets/tab_back.dart';
 import 'package:makan_mana/features/places/domain/opening_hours.dart';
 import 'package:makan_mana/features/places/domain/place.dart';
 import 'package:makan_mana/features/places/domain/review.dart';
 import 'package:makan_mana/features/places/presentation/places_providers.dart';
 import 'package:makan_mana/features/places/presentation/maps_link.dart';
-import 'package:makan_mana/features/places/presentation/place_sheet.dart';
+import 'package:makan_mana/features/places/presentation/place_card.dart';
 
 const Place mamak = Place(
   id: 'ChIJ-mamak',
@@ -44,6 +45,7 @@ void main() {
     Place place = mamak,
     DateTime? now,
     TextScaler scaler = TextScaler.noScaling,
+    bool full = true,
   }) async {
     opened = <Uri>[];
     canOpen = true;
@@ -73,24 +75,27 @@ void main() {
             child: child!,
           ),
           home: Scaffold(
-            body: Builder(
-              builder: (BuildContext c) => Center(
-                child: TextButton(
-                  onPressed: () => showPlaceSheet(
-                    c,
+            body: Stack(
+              children: <Widget>[
+                Positioned.fill(
+                  child: PlaceCardHost(
                     place: place,
+                    won: true,
+                    onClose: () {},
                     onSpinAgain: () => spunAgain++,
                   ),
-                  child: const Text('open'),
                 ),
-              ),
+              ],
             ),
           ),
         ),
       ),
     );
-    await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
+    if (full) {
+      await tester.tap(find.text('Rating'));
+      await tester.pumpAndSettle();
+    }
   }
 
   testWidgets('it names the place with its rating, reviews and distance', (
@@ -180,6 +185,8 @@ void main() {
       'above the navigation bar', (WidgetTester tester) async {
     await show(tester, scaler: const _DampedScaler());
     expect(tester.takeException(), isNull);
+    await tester.ensureVisible(find.text('Spin again'));
+    await tester.pumpAndSettle();
     expect(
       tester.getRect(find.text('Spin again')).bottom,
       lessThanOrEqualTo(915 - 48),
@@ -292,5 +299,49 @@ void main() {
     await tester.tap(more.first);
     await tester.pump();
     expect(opened.single.queryParameters['query_place_id'], 'ChIJ-long');
+  });
+
+  testWidgets('Back shrinks the full sheet to the card, then closes the card', (
+    WidgetTester tester,
+  ) async {
+    final TabBack back = TabBack();
+    int closed = 0;
+    await tester.binding.setSurfaceSize(const Size(412, 915));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          theme: buildAppTheme(),
+          home: Scaffold(
+            body: TabBackScope(
+              back: back,
+              child: Stack(
+                children: <Widget>[
+                  Positioned.fill(
+                    child: PlaceCardHost(
+                      place: mamak,
+                      won: true,
+                      onClose: () => closed++,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final double card = tester.getTopLeft(find.text('Restoran Mamak')).dy;
+    await tester.tap(find.text('Rating'));
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(find.text('Restoran Mamak')).dy, lessThan(card));
+    expect(back.handle(), isTrue);
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(find.text('Restoran Mamak')).dy, card);
+    expect(closed, 0);
+    expect(back.handle(), isTrue);
+    await tester.pumpAndSettle();
+    expect(closed, 1);
   });
 }
