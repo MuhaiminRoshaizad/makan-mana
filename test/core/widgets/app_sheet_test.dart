@@ -55,4 +55,68 @@ void main() {
     // Opened on the root navigator, not the nested one.
     expect(inner.currentState!.canPop(), isFalse);
   });
+
+  group('pulling down on the content', () {
+    Future<void> open(WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(412, 915));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          scrollBehavior: const AppScrollBehavior(),
+          home: Builder(
+            builder: (BuildContext c) => Center(
+              child: TextButton(
+                onPressed: () => showAppSheet<void>(
+                  c,
+                  // Long enough to scroll, as the filters are on a small
+                  // phone or with large text.
+                  builder: (_) => SingleChildScrollView(
+                    child: Column(
+                      children: <Widget>[
+                        for (int i = 0; i < 40; i++)
+                          SizedBox(height: 48, child: Text('Row $i')),
+                      ],
+                    ),
+                  ),
+                ),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> pull(WidgetTester tester, double by) async {
+      final TestGesture g = await tester.startGesture(
+        tester.getCenter(find.text('Row 2')),
+      );
+      for (double moved = 0; moved < by; moved += 10) {
+        await g.moveBy(const Offset(0, 10));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await g.up();
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('at the top, a long pull closes the sheet, as the shop card '
+        'does', (WidgetTester tester) async {
+      await open(tester);
+      await pull(tester, 300);
+      expect(find.text('Row 0'), findsNothing);
+    });
+
+    testWidgets('a short pull springs back and the sheet stays', (
+      WidgetTester tester,
+    ) async {
+      await open(tester);
+      final double top = tester.getTopLeft(find.text('Row 0')).dy;
+      await pull(tester, 40);
+      expect(find.text('Row 0'), findsOneWidget);
+      expect(tester.getTopLeft(find.text('Row 0')).dy, top);
+    });
+  });
 }
