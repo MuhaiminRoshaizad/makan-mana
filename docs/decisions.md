@@ -328,3 +328,26 @@ is 114 characters) still end in an ellipsis on the wedge, though never above
 the arrow up to about 150 characters. The "throw the wheel" hint went, as
 the Spin button now names the action. Not yet seen on a phone: checked in
 tests and a web build.
+
+## 022: One place card for the wheel and the map
+
+**Decided:** a place shows the same way wherever it comes from. The sheet
+after a wheel spin and the card over the map are built from the same parts:
+its name, three figures (rating, reviews, distance) and its hours, with the
+reviews in the full sheet. On the map the card sits over the map with a
+handle, and a tap or a pull upwards opens the full sheet, the same one the
+wheel shows. The wheel's sheet adds See it on the map, which opens the Map
+tab with every other place put away, flies in on the winner and shows its
+card; Show all, or closing the card, brings the others back. Pins move on
+the app's spring (`AppMotion.spring`): a chosen pin springs up and settles,
+and so does each pin a map spin hops across. Chosen by the user from a demo
+with two options for a tapped pin; they took the card that opens the sheet
+over the full sheet at once (demo: claude.ai/artifact/7QH8fRugdYQGTwPFgHL9Hp).
+
+**Why:** the wheel showed a full sheet and the map a smaller card with
+different figures and no reviews, so the two tabs read as two apps. A pin
+jumped to its chosen size in one frame, with no motion at all.
+
+**Costs:** the card does not grow into the sheet as in the demo: the sheet
+opens over it, from the bottom, as every sheet in the app does, since the
+floating tab bar sits above anything a tab draws.

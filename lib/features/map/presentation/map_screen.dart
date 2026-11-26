@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -17,8 +18,8 @@ import '../../places/domain/place.dart';
 import '../../places/domain/place_filters.dart';
 import '../../places/domain/places_repository.dart';
 import '../../places/presentation/filters_button.dart';
-import '../../places/presentation/hours_text.dart';
 import '../../places/presentation/maps_link.dart';
+import '../../places/presentation/place_sheet.dart';
 import '../../places/presentation/places_providers.dart';
 import 'places_map.dart';
 
@@ -321,11 +322,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               bottom: clearance,
               child: _HandOver(
                 child: selected != null
-                    ? _PinCard(
+                    ? _PlaceCard(
                         key: ValueKey<String>('card ${selected.id} $_won'),
                         place: selected,
                         won: _won,
                         onClose: () => _select(null),
+                        onSpinAgain: () {
+                          _select(null);
+                          _spin(list);
+                        },
                       )
                     : list.isEmpty || here == null
                     ? null
@@ -616,7 +621,7 @@ class _HandOverState extends State<_HandOver>
   Widget build(BuildContext context) {
     final Widget? shown = _shown;
     if (shown == null) return const SizedBox.shrink();
-    final bool card = shown is _PinCard;
+    final bool card = shown is _PlaceCard;
     return AnimatedBuilder(
       animation: _a,
       builder: (BuildContext context, Widget? child) {
@@ -697,121 +702,152 @@ class _RoundButton extends StatelessWidget {
   }
 }
 
-/// The tapped place: what it is, whether it is open, and the way there.
-class _PinCard extends ConsumerWidget {
-  const _PinCard({
+/// The chosen place over the map, laid out as the top of its sheet. A tap,
+/// or a pull upwards, opens the whole sheet with the reviews; the card
+/// follows the finger a little and springs back (docs/decisions.md 022).
+class _PlaceCard extends ConsumerStatefulWidget {
+  const _PlaceCard({
     super.key,
     required this.place,
     required this.won,
     required this.onClose,
+    required this.onSpinAgain,
   });
 
   final Place place;
 
-  /// A spin's winner, so the card says so.
+  /// A spin's winner, so the card says so and offers another spin.
   final bool won;
   final VoidCallback onClose;
+  final VoidCallback onSpinAgain;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final double? rating = place.rating;
-    final String reviews = place.reviewCount == 1
-        ? '1 review'
-        : '${formatCount(place.reviewCount)} reviews';
-    final String meta = <String>[
-      rating == null ? 'No rating yet' : '${rating.toStringAsFixed(1)} stars',
-      reviews,
-      '${formatDistance(place.distanceMetres)} away',
-    ].join(', ');
-    final DateTime now = ref.read(clockProvider)();
-    return Semantics(
-      container: true,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: AppShadows.float,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.md,
-            AppSpacing.xs,
-            AppSpacing.lg,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+  ConsumerState<_PlaceCard> createState() => _PlaceCardState();
+}
+
+class _PlaceCardState extends ConsumerState<_PlaceCard>
+    with SingleTickerProviderStateMixin {
+  /// How far the card has been pulled up, in logical pixels.
+  late final AnimationController _pull = AnimationController.unbounded(
+    vsync: this,
+  );
+
+  /// A pull this far, or a flick upwards, opens the sheet.
+  static const double _opensAt = 56;
+
+  @override
+  void dispose() {
+    _pull.dispose();
+    super.dispose();
+  }
+
+  void _open() {
+    showPlaceSheet(
+      context,
+      place: widget.place,
+      won: widget.won,
+      onSpinAgain: widget.won
+          ? () {
+              Navigator.of(context, rootNavigator: true).pop();
+              widget.onSpinAgain();
+            }
+          : null,
+    );
+  }
+
+  void _drag(DragUpdateDetails d) {
+    // Upwards it follows the finger, slowing as it goes; downwards it
+    // barely moves.
+    final double up = math.max(0, _pull.value - d.delta.dy);
+    _pull.value = up < 40 ? up : 40 + (up - 40) * 0.35;
+  }
+
+  void _release(DragEndDetails d) {
+    final bool opens =
+        _pull.value >= _opensAt * 0.5 || (d.primaryVelocity ?? 0) < -500;
+    if (opens) _open();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _pull.value = 0;
+      return;
+    }
+    _pull.animateWith(SpringSimulation(AppMotion.spring, _pull.value, 0, 0));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _pull,
+      builder: (BuildContext context, Widget? child) =>
+          Transform.translate(offset: Offset(0, -_pull.value), child: child),
+      child: Semantics(
+        container: true,
+        button: true,
+        label: 'Show more about ${widget.place.name}',
+        onTap: _open,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: _open,
+          onVerticalDragUpdate: _drag,
+          onVerticalDragEnd: _release,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: AppShadows.float,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.sm,
+                AppSpacing.xs,
+                AppSpacing.lg,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: AppSpacing.xs),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          if (won)
-                            const Padding(
-                              padding: EdgeInsets.only(bottom: AppSpacing.xs),
-                              child: Text(
-                                'Today you are eating at',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.muted,
-                                ),
-                              ),
-                            ),
-                          Text(
-                            place.name,
-                            style: const TextStyle(
-                              fontSize: 19,
-                              height: 1.25,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.ink,
-                            ),
-                          ),
-                          const SizedBox(height: AppSpacing.xs),
-                          Text(
-                            meta,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: AppColors.muted,
-                            ),
-                          ),
-                          if (place.hours case final hours?) ...<Widget>[
-                            const SizedBox(height: AppSpacing.xs),
-                            Text(
-                              hoursLine(hours, now),
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.ink,
-                              ),
-                            ),
-                          ],
-                        ],
+                  // The handle says the card can be pulled up.
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: AppColors.handle,
+                        borderRadius: BorderRadius.circular(3),
                       ),
                     ),
                   ),
-                  IconButton(
-                    onPressed: onClose,
-                    tooltip: 'Close',
-                    icon: const Icon(CupertinoIcons.xmark, size: 20),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: AppSpacing.sm),
+                          child: PlaceSummary(
+                            place: widget.place,
+                            won: widget.won,
+                            compact: true,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: widget.onClose,
+                        tooltip: 'Close',
+                        icon: const Icon(CupertinoIcons.xmark, size: 20),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Padding(
+                    padding: const EdgeInsets.only(right: AppSpacing.md),
+                    child: FilledButton(
+                      onPressed: () => openInMaps(context, ref, widget.place),
+                      child: const Text('Open in Google Maps'),
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.md),
-              Padding(
-                padding: const EdgeInsets.only(right: AppSpacing.md),
-                child: FilledButton(
-                  onPressed: () => openInMaps(context, ref, place),
-                  child: const Text('Open in Google Maps'),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),

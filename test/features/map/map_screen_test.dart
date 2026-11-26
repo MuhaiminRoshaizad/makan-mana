@@ -16,6 +16,7 @@ import 'package:makan_mana/features/places/domain/place.dart';
 import 'package:makan_mana/features/places/domain/place_filters.dart';
 import 'package:makan_mana/features/places/domain/places_repository.dart';
 import 'package:makan_mana/features/places/presentation/maps_link.dart';
+import 'package:makan_mana/features/places/presentation/place_sheet.dart';
 import 'package:makan_mana/features/places/presentation/places_providers.dart';
 
 const LatLon here = (latitude: 3.1478, longitude: 101.6953);
@@ -178,6 +179,39 @@ void main() {
     shown!.onMapTap();
     await tester.pumpAndSettle();
     expect(find.text(first.name), findsNothing);
+  });
+
+  testWidgets('the card shows a place as the sheet does: its rating, '
+      'reviews and distance as three figures', (WidgetTester tester) async {
+    await show(tester);
+    shown!.onPinTap(shown!.places.first.id);
+    await tester.pumpAndSettle();
+    expect(find.text('Rating'), findsOneWidget);
+    expect(find.text('Reviews'), findsOneWidget);
+    expect(find.text('Away'), findsOneWidget);
+  });
+
+  testWidgets('tapping the card, or pulling it up, opens the place in full', (
+    WidgetTester tester,
+  ) async {
+    await show(tester);
+    final Place first = shown!.places.first;
+    shown!.onPinTap(first.id);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rating'));
+    await tester.pumpAndSettle();
+    expect(find.byType(PlaceSheet), findsOneWidget);
+    // A tapped pin is not a spin's winner, so the sheet offers no spin.
+    expect(find.text('Spin again'), findsNothing);
+    Navigator.of(tester.element(find.byType(PlaceSheet))).pop();
+    await tester.pumpAndSettle();
+    expect(find.byType(PlaceSheet), findsNothing);
+    await tester.drag(
+      find.bySemanticsLabel('Show more about ${first.name}'),
+      const Offset(0, -140),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(PlaceSheet), findsOneWidget);
   });
 
   testWidgets('a card for a place the filters then take off goes too', (
