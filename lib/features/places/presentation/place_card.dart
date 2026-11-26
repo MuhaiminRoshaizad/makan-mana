@@ -232,15 +232,34 @@ class _PlaceCardHostState extends ConsumerState<PlaceCardHost>
     _settle(to, v);
   }
 
-  /// A pull down at the top of the full sheet's reviews shrinks it.
+  /// A finger is dragging the full sheet's content. The content stays
+  /// scrollable to the end of that drag, even once the sheet has started
+  /// to shrink: switching it off mid-drag would cancel the drag.
+  bool _contentDrag = false;
+
+  /// A pull down on the full sheet's content, once it is scrolled to the
+  /// top, shrinks the sheet; pushed back up in the same drag, the sheet
+  /// grows again before the content scrolls.
   bool _onScroll(ScrollNotification n) {
-    if (n is OverscrollNotification &&
+    if (n is ScrollStartNotification && n.dragDetails != null) {
+      setState(() => _contentDrag = true);
+      _dragFrom = 1;
+    } else if (n is OverscrollNotification &&
         n.dragDetails != null &&
         n.overscroll < 0) {
       _grow.stop();
       _grow.value += n.overscroll / _span;
-    } else if (n is ScrollEndNotification && _grow.value < 0.999) {
-      _settle(_grow.value > 0.85 ? 1 : 0);
+    } else if (n is ScrollUpdateNotification &&
+        n.dragDetails != null &&
+        _grow.value < 1 &&
+        (n.scrollDelta ?? 0) > 0) {
+      _grow.value = math.min(1, _grow.value + n.scrollDelta! / _span);
+      _scroll.jumpTo(0);
+    } else if (n is ScrollEndNotification && _contentDrag) {
+      setState(() => _contentDrag = false);
+      if (_grow.value < 0.999) {
+        _release(n.dragDetails ?? DragEndDetails(primaryVelocity: 0));
+      }
     }
     return false;
   }
@@ -367,7 +386,7 @@ class _PlaceCardHostState extends ConsumerState<PlaceCardHost>
                             controller: _scroll,
                             // Only the full sheet scrolls; the card's drags
                             // move the card.
-                            physics: _grow.value >= 0.999
+                            physics: _grow.value >= 0.999 || _contentDrag
                                 ? const ClampingScrollPhysics()
                                 : const NeverScrollableScrollPhysics(),
                             padding: EdgeInsets.fromLTRB(

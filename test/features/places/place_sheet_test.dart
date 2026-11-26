@@ -344,4 +344,43 @@ void main() {
     await tester.pumpAndSettle();
     expect(closed, 1);
   });
+
+  testWidgets('in the full sheet scrolled to the top, pulling the content down '
+      'shrinks it back to the card, as a finger does, step by step', (
+    WidgetTester tester,
+  ) async {
+    final String long = List<String>.filled(30, 'Sedap gila.').join(' ');
+    await show(
+      tester,
+      place: Place(
+        id: 'ChIJ-busy',
+        name: 'Kafe Bertam',
+        rating: 4.5,
+        reviewCount: 900,
+        latitude: 0,
+        longitude: 0,
+        distanceMetres: 300,
+        openNow: true,
+        reviews: <Review>[
+          const Review(rating: 5, text: 'Sedap, fast service.'),
+          for (int i = 0; i < 5; i++) Review(rating: 4, text: long),
+        ],
+      ),
+    );
+    final double full = tester.getTopLeft(find.text('Kafe Bertam')).dy;
+    // A finger moves a few pixels a frame, not 400 at once.
+    final TestGesture g = await tester.startGesture(
+      tester.getCenter(find.text('Sedap, fast service.')),
+    );
+    for (int i = 0; i < 40; i++) {
+      await g.moveBy(const Offset(0, 12));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await g.up();
+    await tester.pumpAndSettle();
+    expect(
+      tester.getTopLeft(find.text('Kafe Bertam')).dy,
+      greaterThan(full + 300),
+    );
+  });
 }
