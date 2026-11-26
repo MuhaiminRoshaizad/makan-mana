@@ -3,6 +3,8 @@ import 'dart:math' show Point;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
@@ -33,6 +35,7 @@ class MapProps {
     this.focusTick = 0,
     this.ringAt,
     this.ringTick = 0,
+    this.aloneId,
   });
 
   /// The search centre: where the camera comes home to.
@@ -77,6 +80,10 @@ class MapProps {
   /// goes up.
   final LatLon? ringAt;
   final int ringTick;
+
+  /// The one place left on the map, as when a wheel's winner is seen on
+  /// it; the other pins shrink away. Null shows them all.
+  final String? aloneId;
 }
 
 typedef MapViewBuilder = Widget Function(MapProps props);
@@ -115,12 +122,27 @@ class PlacesMap extends StatefulWidget {
   State<PlacesMap> createState() => _PlacesMapState();
 }
 
-class _PlacesMapState extends State<PlacesMap> {
+class _PlacesMapState extends State<PlacesMap>
+    with SingleTickerProviderStateMixin {
   MapLibreMapController? _map;
   bool _ready = false;
   double _width = 400;
   Timer? _ring;
   Timer? _bounce;
+
+  /// Pins on the move: the chosen one springs up on the app's spring and
+  /// the one it replaced settles back. They are drawn on their own layer,
+  /// so each frame sends one or two points rather than every place.
+  late final Ticker _ticker = createTicker(_tick);
+  final Map<String, _Lift> _lifts = <String, _Lift>{};
+
+  /// How much of the other pins shows while one place is alone: 1 all, 0
+  /// none.
+  double _others = 1;
+  double _othersFrom = 1;
+  double _othersTo = 1;
+  Duration? _othersStart;
+  Duration _now = Duration.zero;
 
   MapProps get _p => widget.props;
   bool get _still => MediaQuery.disableAnimationsOf(context);
@@ -129,7 +151,76 @@ class _PlacesMapState extends State<PlacesMap> {
   void dispose() {
     _ring?.cancel();
     _bounce?.cancel();
+    _ticker.dispose();
     super.dispose();
+  }
+
+  /// Springs [id] up to stand chosen, and lets the pin chosen before settle.
+  void _choose(String? id, String? was) {
+    if (was != null && was != id) {
+      final _Lift? old = _lifts[was];
+      if (old != null) old.to(0, _now);
+    }
+    if (id != null) {
+      (_lifts[id] ??= _Lift()).to(1, _now);
+    }
+    if (_still) {
+      _lifts.removeWhere((String _, _Lift l) => l.target == 0);
+      for (final _Lift l in _lifts.values) {
+        l.settle();
+      }
+    }
+    _sendMoving();
+  }
+
+  void _hideOthers(bool hide) {
+    final double to = hide ? 0 : 1;
+    if (_othersTo == to) return;
+    _othersFrom = _others;
+    _othersTo = to;
+    _othersStart = null;
+    if (_still) {
+      _others = to;
+      _map?.setLayerProperties('place-pins', _pinLayer());
+      return;
+    }
+    _sendMoving();
+  }
+
+  void _sendMoving() {
+    final bool moving =
+        _lifts.values.any((_Lift l) => !l.done) || _others != _othersTo;
+    if (moving && !_ticker.isActive) _ticker.start();
+    _map?.setGeoJsonSource('chosen', _chosenJson());
+    _map?.setGeoJsonSource('places', _placesJson());
+  }
+
+  void _tick(Duration now) {
+    _now = now;
+    final MapLibreMapController? map = _map;
+    if (map == null || !mounted) return;
+    bool moving = false;
+    for (final _Lift l in _lifts.values) {
+      l.at(now);
+      moving |= !l.done;
+    }
+    // Settled pins that went back to rest return to the main layer.
+    final int before = _lifts.length;
+    _lifts.removeWhere((String _, _Lift l) => l.done && l.target == 0);
+    map.setGeoJsonSource('chosen', _chosenJson());
+    if (_lifts.length != before) map.setGeoJsonSource('places', _placesJson());
+    if (_others != _othersTo) {
+      final Duration start = _othersStart ??= now;
+      final double t = ((now - start).inMicroseconds / 320000).clamp(0, 1);
+      final Curve curve = _othersTo < _othersFrom
+          ? AppMotion.exit
+          : AppMotion.enter;
+      _others = _othersFrom + (_othersTo - _othersFrom) * curve.transform(t);
+      if (t >= 1) _others = _othersTo;
+      map.setLayerProperties('place-pins', _pinLayer());
+      moving |= _others != _othersTo;
+    }
+    if (!moving) _ticker.stop();
   }
 
   @override
@@ -138,8 +229,15 @@ class _PlacesMapState extends State<PlacesMap> {
     if (!_ready) return;
     final MapProps was = old.props;
     final MapLibreMapController map = _map!;
-    if (was.places != _p.places || was.selectedId != _p.selectedId) {
+    if (was.selectedId != _p.selectedId) {
+      _choose(_p.selectedId, was.selectedId);
+    } else if (was.places != _p.places) {
       map.setGeoJsonSource('places', _placesJson());
+      map.setGeoJsonSource('chosen', _chosenJson());
+    }
+    if (was.aloneId != _p.aloneId) {
+      map.setGeoJsonSource('places', _placesJson());
+      _hideOthers(_p.aloneId != null);
     }
     final bool moved =
         was.latitude != _p.latitude ||
@@ -162,19 +260,20 @@ class _PlacesMapState extends State<PlacesMap> {
       );
     }
     if (was.ringTick != _p.ringTick && _p.ringAt != null) _sendRing(_p.ringAt!);
-    if (was.focusTick != _p.focusTick && _p.focus != null) {
-      final LatLon f = _p.focus!;
-      map.animateCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(
-            target: LatLng(f.latitude, f.longitude),
-            zoom: _home().zoom + focusZoomIn,
-            tilt: _p.tilted ? mapTilt : 0,
-          ),
+    if (was.focusTick != _p.focusTick && _p.focus != null) _flyIn(_p.focus!);
+  }
+
+  void _flyIn(LatLon f) {
+    _map?.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: LatLng(f.latitude, f.longitude),
+          zoom: _home().zoom + focusZoomIn,
+          tilt: _p.tilted ? mapTilt : 0,
         ),
-        duration: _still ? Duration.zero : const Duration(milliseconds: 1150),
-      );
-    }
+      ),
+      duration: _still ? Duration.zero : const Duration(milliseconds: 1150),
+    );
   }
 
   CameraPosition _home() => CameraPosition(
@@ -211,51 +310,9 @@ class _PlacesMapState extends State<PlacesMap> {
       enableInteraction: false,
     );
     await map.addGeoJsonSource('places', _placesJson(), promoteId: 'id');
-    await map.addSymbolLayer(
-      'places',
-      'place-pins',
-      SymbolLayerProperties(
-        iconImage: <Object>['get', 'icon'],
-        iconAnchor: 'bottom',
-        iconAllowOverlap: true,
-        // The chosen place stands taller and lifts off the map.
-        iconSize: <Object>[
-          'case',
-          <Object>['get', 'selected'],
-          1.25,
-          1.0,
-        ],
-        iconOffset: <Object>[
-          'case',
-          <Object>['get', 'selected'],
-          <Object>[
-            'literal',
-            <double>[0, -6],
-          ],
-          <Object>[
-            'literal',
-            <double>[0, 0],
-          ],
-        ],
-        textField: <Object>['get', 'name'],
-        textFont: <String>['Noto Sans Bold'],
-        textSize: 12.5,
-        textAnchor: 'top',
-        textOffset: <double>[0, 0.35],
-        textMaxWidth: 9,
-        textOptional: true,
-        textColor: _hex(AppColors.ink),
-        textHaloColor: _hex(AppColors.surface),
-        textHaloWidth: 1.6,
-        // The chosen place's name wins when labels collide.
-        symbolSortKey: <Object>[
-          'case',
-          <Object>['get', 'selected'],
-          0,
-          1,
-        ],
-      ),
-    );
+    await map.addSymbolLayer('places', 'place-pins', _pinLayer());
+    await map.addGeoJsonSource('chosen', _chosenJson());
+    await map.addSymbolLayer('chosen', 'chosen-pins', _chosenLayer());
     await map.addGeoJsonSource('land', _ringJson(null, 0, 0));
     await map.addCircleLayer(
       'land',
@@ -302,6 +359,19 @@ class _PlacesMapState extends State<PlacesMap> {
       ),
     );
     await _showYou();
+    _others = _othersTo = _p.aloneId == null ? 1 : 0;
+    await map.setLayerProperties('place-pins', _pinLayer());
+    if (_p.selectedId case final String id) {
+      _lifts[id] = _Lift()..settleAt(1);
+      await map.setGeoJsonSource('places', _placesJson());
+      await map.setGeoJsonSource('chosen', _chosenJson());
+    }
+    // A place sent from the wheel can arrive before the map is ready, as
+    // when it opens the Map tab for the first time: fly in on it now.
+    if (_p.aloneId != null) {
+      if (_p.focus case final LatLon f) _flyIn(f);
+      if (_p.ringAt case final LatLon at) _sendRing(at);
+    }
     if (mounted) setState(() => _ready = true);
   }
 
@@ -432,24 +502,135 @@ class _PlacesMapState extends State<PlacesMap> {
       },
   ]);
 
-  Map<String, dynamic> _placesJson() {
-    final int n = _p.places.length;
-    return _collection(<Map<String, dynamic>>[
-      for (final (int i, Place p) in _p.places.indexed)
-        // Android and iOS take the id from the feature; the web from
-        // promoteId.
+  Map<String, dynamic> _placeProps(int i, Place p) => <String, dynamic>{
+    'id': p.id,
+    'name': p.name,
+    'icon': 'pin-${wedgeColors.indexOf(wedgeColorFor(i, _p.places.length))}',
+  };
+
+  Map<String, dynamic> _placesJson() => _collection(<Map<String, dynamic>>[
+    for (final (int i, Place p) in _p.places.indexed)
+      // Android and iOS take the id from the feature; the web from
+      // promoteId.
+      _point(
+        (latitude: p.latitude, longitude: p.longitude),
+        <String, dynamic>{
+          ..._placeProps(i, p),
+          // A pin on the move is drawn on the chosen layer instead.
+          'moving': _lifts.containsKey(p.id),
+          'alone': p.id == _p.aloneId,
+        },
+        p.id,
+      ),
+  ]);
+
+  /// The pins on the move, each with how far it stands up: 0 at rest, 1
+  /// chosen, a little past 1 as the spring overshoots.
+  Map<String, dynamic> _chosenJson() => _collection(<Map<String, dynamic>>[
+    for (final (int i, Place p) in _p.places.indexed)
+      if (_lifts[p.id] case final _Lift lift)
         _point(
           (latitude: p.latitude, longitude: p.longitude),
-          <String, dynamic>{
-            'id': p.id,
-            'name': p.name,
-            'icon': 'pin-${wedgeColors.indexOf(wedgeColorFor(i, n))}',
-            'selected': p.id == _p.selectedId,
-          },
+          <String, dynamic>{..._placeProps(i, p), 'lift': lift.value},
           p.id,
         ),
-    ]);
+  ]);
+
+  /// The pins at rest. While one place is alone the others shrink and fade
+  /// by [_others].
+  SymbolLayerProperties _pinLayer() {
+    final double k = _others;
+    return SymbolLayerProperties(
+      iconImage: <Object>['get', 'icon'],
+      iconAnchor: 'bottom',
+      iconAllowOverlap: true,
+      iconSize: <Object>[
+        'case',
+        <Object>['get', 'alone'],
+        1.0,
+        0.4 + 0.6 * k,
+      ],
+      iconOpacity: <Object>[
+        'case',
+        <Object>['get', 'moving'],
+        0.0,
+        <Object>['get', 'alone'],
+        1.0,
+        k,
+      ],
+      textOpacity: <Object>[
+        'case',
+        <Object>['get', 'moving'],
+        0.0,
+        <Object>['get', 'alone'],
+        1.0,
+        k,
+      ],
+      textField: <Object>['get', 'name'],
+      textFont: <String>['Noto Sans Bold'],
+      textSize: 12.5,
+      textAnchor: 'top',
+      textOffset: <double>[0, 0.35],
+      textMaxWidth: 9,
+      textOptional: true,
+      textColor: _hex(AppColors.ink),
+      textHaloColor: _hex(AppColors.surface),
+      textHaloWidth: 1.6,
+    );
   }
+
+  /// The pins on the move, standing taller and lifted off the map by their
+  /// spring. A name shows with its pin's height, so a pin settling back
+  /// does not cover the name of the one rising.
+  SymbolLayerProperties _chosenLayer() => SymbolLayerProperties(
+    iconImage: <Object>['get', 'icon'],
+    iconAnchor: 'bottom',
+    iconAllowOverlap: true,
+    iconIgnorePlacement: true,
+    iconSize: <Object>[
+      'interpolate',
+      <Object>['linear'],
+      <Object>['get', 'lift'],
+      0,
+      1.0,
+      1.5,
+      1.375,
+    ],
+    iconOffset: <Object>[
+      'interpolate',
+      <Object>['linear'],
+      <Object>['get', 'lift'],
+      0,
+      <Object>[
+        'literal',
+        <double>[0, 0],
+      ],
+      1.5,
+      <Object>[
+        'literal',
+        <double>[0, -9],
+      ],
+    ],
+    textField: <Object>['get', 'name'],
+    textFont: <String>['Noto Sans Bold'],
+    textSize: 12.5,
+    textAnchor: 'top',
+    textOffset: <double>[0, 0.35],
+    textMaxWidth: 9,
+    textAllowOverlap: true,
+    textOpacity: <Object>[
+      'interpolate',
+      <Object>['linear'],
+      <Object>['get', 'lift'],
+      0.3,
+      0.0,
+      0.8,
+      1.0,
+    ],
+    textColor: _hex(AppColors.ink),
+    textHaloColor: _hex(AppColors.surface),
+    textHaloWidth: 1.6,
+  );
 
   /// The dropped pin at [at], at a [stage] of its drop: 0 resting, 1 lifted,
   /// 2 just past the ground.
@@ -502,5 +683,49 @@ class _PlacesMapState extends State<PlacesMap> {
         );
       },
     );
+  }
+}
+
+/// One pin's spring, on [AppMotion.spring]: slightly under-damped, so a
+/// chosen pin passes its height a little and settles.
+class _Lift {
+  double value = 0;
+  double target = 0;
+  SpringSimulation? _sim;
+  Duration? _start;
+  Duration _from = Duration.zero;
+  bool done = true;
+
+  void to(double next, Duration now) {
+    target = next;
+    _sim = SpringSimulation(
+      AppMotion.spring,
+      value,
+      next,
+      _sim?.dx(_seconds(now)) ?? 0,
+    );
+    _from = now;
+    _start = null;
+    done = false;
+  }
+
+  void settle() => settleAt(target);
+
+  void settleAt(double v) {
+    value = target = v;
+    _sim = null;
+    done = true;
+  }
+
+  double _seconds(Duration now) =>
+      (now - (_start ?? _from)).inMicroseconds / 1e6;
+
+  void at(Duration now) {
+    final SpringSimulation? sim = _sim;
+    if (sim == null) return;
+    _start ??= now;
+    final double t = _seconds(now);
+    value = sim.x(t);
+    if (sim.isDone(t)) settleAt(target);
   }
 }
