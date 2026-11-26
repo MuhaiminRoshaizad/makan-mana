@@ -64,7 +64,7 @@ class DemoPlacesRepository implements PlacesRepository {
         ('Kedai Mee Rebus', 4.2, 412, 500, true),
         ('Kedai Kopi Baru', 3.8, 520, 600, true),
         ('Warung Nasi Campur', 4.3, 968, 650, true),
-        ('Gerai Cendol', 3.6, 140, 750, true),
+        ('Gerai Char Kuey Teow', 3.6, 140, 750, true),
         ('Restoran Tomyam', 4.1, 2210, 800, true),
         ('Kopitiam Lama', 4.6, 310, 900, true),
         ('Kedai Mee Kari', 3.9, 76, 1000, true),

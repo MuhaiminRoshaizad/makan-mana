@@ -44,6 +44,59 @@ void main() {
     }
   });
 
+  test('a bakery or dessert type wins over a kedai-sounding name', () {
+    for (final Place x in <Place>[
+      p('Kedai kek murni', 'Bakery'),
+      p('Kedai Aiskrim HafizLy Caw. Penaga', 'Ice cream shop'),
+      p('Kopi Gantung Perlis & Mogo-yo Dessert', 'Sweets and dessert buffet'),
+      p('SD CENDOL', 'Cendol restaurant'),
+    ]) {
+      expect(kindOf(x), PlaceKind.cafe, reason: x.name);
+    }
+  });
+
+  test('a dessert name is a cafe even when Google types it a restaurant', () {
+    for (final Place x in <Place>[
+      p('Cendol Warisan', 'Restaurant'),
+      p('Happy waffle', 'Restaurant'),
+      p('Lily Bakery & Kitchen', 'Restaurant'),
+      p('Snow Cheese Cake Meleleh', 'Restaurant'),
+      p('Delisha Ice Cream', 'Restaurant'),
+      p('MR CHURROS (Penaga)', 'Hawker stall'),
+      p('Din Ais Kacang'),
+      p('Pates Et Patisserie', 'Restaurant'),
+    ]) {
+      expect(kindOf(x), PlaceKind.cafe, reason: x.name);
+    }
+  });
+
+  test('a dessert word beside a main meal stays kedai makan', () {
+    for (final Place x in <Place>[
+      p(
+        'The Memory Cafe | Chicken Chop | Kambing Grill | Dessert',
+        'Coffee shop',
+      ),
+      p('Kambing Lamb magic perap kek surprise delivery'),
+    ]) {
+      expect(kindOf(x), PlaceKind.kedaiMakan, reason: x.name);
+    }
+  });
+
+  test('a place Google mislabels is set by hand', () {
+    final Place sweetrolley = Place(
+      id: 'ChIJE2AQMj_RSjARGoH5w32RIbU',
+      name: 'Sweetrolley',
+      rating: 5,
+      reviewCount: 2,
+      latitude: 0,
+      longitude: 0,
+      distanceMetres: 100,
+      openNow: true,
+      category: 'Restaurant',
+    );
+    expect(kindOf(sweetrolley), PlaceKind.cafe);
+  });
+
   test('burgers, pizza and the big brands are fast food & chains', () {
     for (final Place x in <Place>[
       p('KFC Bertam Drive Thru (DT)', 'Fast food restaurant'),
