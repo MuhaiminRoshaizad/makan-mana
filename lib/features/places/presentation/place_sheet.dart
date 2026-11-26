@@ -5,40 +5,58 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/format/formatters.dart';
 import '../../../core/theme/app_tokens.dart';
 import '../../../core/widgets/app_sheet.dart';
-import '../../places/domain/place.dart';
-import '../../places/domain/review.dart';
-import '../../places/presentation/hours_text.dart';
-import '../../places/presentation/maps_link.dart';
-import '../../places/presentation/places_providers.dart';
+import '../domain/place.dart';
+import '../domain/review.dart';
+import 'hours_text.dart';
+import 'maps_link.dart';
+import 'places_providers.dart';
 
-/// Opens [ResultSheet] for [place]. It may grow past the usual 9/16 cap
+/// Opens [PlaceSheet] for [place]. It may grow past the usual 9/16 cap
 /// and scrolls, so large system text never cuts off its buttons.
-Future<void> showResultSheet(
+Future<void> showPlaceSheet(
   BuildContext context, {
   required Place place,
-  required VoidCallback onSpinAgain,
+  bool won = true,
+  VoidCallback? onSeeOnMap,
+  VoidCallback? onSpinAgain,
 }) => showAppSheet<void>(
   context,
   scrollControlled: true,
-  builder: (_) => ResultSheet(place: place, onSpinAgain: onSpinAgain),
+  builder: (_) => PlaceSheet(
+    place: place,
+    won: won,
+    onSeeOnMap: onSeeOnMap,
+    onSpinAgain: onSpinAgain,
+  ),
 );
 
-/// Where the wheel landed: the place, how it rates and how far it is, with
-/// a way to get there and a way to spin again.
-class ResultSheet extends ConsumerWidget {
-  const ResultSheet({
+/// A place in full, on the wheel's result and on the map alike: what it
+/// is, how it rates, how far it is and when it opens, the ways onward, and
+/// its reviews.
+class PlaceSheet extends ConsumerWidget {
+  const PlaceSheet({
     super.key,
     required this.place,
-    required this.onSpinAgain,
+    this.won = true,
+    this.onSeeOnMap,
+    this.onSpinAgain,
   });
 
   final Place place;
-  final VoidCallback onSpinAgain;
+
+  /// A spin's winner, so the sheet says so.
+  final bool won;
+
+  /// Shows the place alone on the map; null leaves the button out.
+  final VoidCallback? onSeeOnMap;
+
+  /// Null leaves Spin again out.
+  final VoidCallback? onSpinAgain;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final double? rating = place.rating;
-    final DateTime now = ref.read(clockProvider)();
+    final VoidCallback? seeOnMap = onSeeOnMap;
+    final VoidCallback? spinAgain = onSpinAgain;
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
@@ -51,133 +69,206 @@ class ResultSheet extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            const Text(
-              'Today you are eating at',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: AppColors.muted,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Semantics(
-              header: true,
-              child: Text(
-                place.name,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 28,
-                  height: 1.2,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.4,
-                  color: AppColors.ink,
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            _Stats(
-              cells: <(String, String, bool)>[
-                (
-                  rating == null ? 'None' : rating.toStringAsFixed(1),
-                  'Rating',
-                  rating != null,
-                ),
-                (formatCount(place.reviewCount), 'Reviews', false),
-                (formatDistance(place.distanceMetres), 'Away', false),
-              ],
-            ),
-            if (place.hours case final hours?) ...<Widget>[
-              const SizedBox(height: AppSpacing.md),
-              Row(
-                children: <Widget>[
-                  const Icon(
-                    CupertinoIcons.clock,
-                    size: 17,
-                    color: AppColors.muted,
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Flexible(
-                    child: Text(
-                      hoursLine(hours, now),
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.ink,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+            PlaceSummary(place: place, won: won),
             const SizedBox(height: AppSpacing.xxl),
             FilledButton(
               onPressed: () => openInMaps(context, ref, place),
               child: const Text('Open in Google Maps'),
             ),
-            const SizedBox(height: AppSpacing.sm),
-            OutlinedButton(
-              onPressed: onSpinAgain,
-              child: const Text('Spin again'),
-            ),
-            if (place.reviews.isNotEmpty) ...<Widget>[
-              const SizedBox(height: AppSpacing.xxl),
-              Semantics(
-                header: true,
-                child: const Text(
-                  'Reviews',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3,
-                    color: AppColors.ink,
-                  ),
-                ),
+            if (seeOnMap != null) ...<Widget>[
+              const SizedBox(height: AppSpacing.sm),
+              OutlinedButton(
+                onPressed: seeOnMap,
+                child: const Text('See it on the map'),
               ),
-              for (final Review r in place.reviews)
-                _ReviewTile(
-                  review: r,
-                  now: now,
-                  onReadMore: () => openInMaps(context, ref, place),
-                ),
             ],
-            // The list keeps a few reviews; Google Maps has them all, in
-            // any order, newest first included.
-            if (place.reviewCount > place.reviews.length) ...<Widget>[
-              const SizedBox(height: AppSpacing.md),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton(
-                  onPressed: () => openInMaps(context, ref, place),
+            if (spinAgain != null) ...<Widget>[
+              const SizedBox(height: AppSpacing.sm),
+              if (seeOnMap != null)
+                TextButton(
+                  onPressed: spinAgain,
                   style: TextButton.styleFrom(
-                    padding: EdgeInsets.zero,
                     minimumSize: const Size(48, 48),
                     textStyle: const TextStyle(
-                      fontSize: 15,
+                      fontSize: 16,
                       fontWeight: FontWeight.w700,
                       decoration: TextDecoration.underline,
                     ),
                   ),
-                  child: Text(
-                    place.reviewCount == 1
-                        ? 'Read the review on Google Maps'
-                        : 'Read all ${formatCount(place.reviewCount)} reviews on Google Maps',
+                  child: const Text('Spin again'),
+                )
+              else
+                OutlinedButton(
+                  onPressed: spinAgain,
+                  child: const Text('Spin again'),
+                ),
+            ],
+            PlaceReviews(place: place),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The top of a place's card and sheet: a spin's winner says so, then the
+/// name, three figures and the hours. [compact] is the card over the map.
+class PlaceSummary extends ConsumerWidget {
+  const PlaceSummary({
+    super.key,
+    required this.place,
+    required this.won,
+    this.compact = false,
+  });
+
+  final Place place;
+  final bool won;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final double? rating = place.rating;
+    final DateTime now = ref.read(clockProvider)();
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        if (won) ...<Widget>[
+          Text(
+            'Today you are eating at',
+            style: TextStyle(
+              fontSize: compact ? 13 : 15,
+              fontWeight: FontWeight.w600,
+              color: AppColors.muted,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+        ],
+        Semantics(
+          header: true,
+          child: Text(
+            place.name,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: compact ? 21 : 28,
+              height: 1.2,
+              fontWeight: FontWeight.w800,
+              letterSpacing: compact ? -0.2 : -0.4,
+              color: AppColors.ink,
+            ),
+          ),
+        ),
+        SizedBox(height: compact ? AppSpacing.md : AppSpacing.lg),
+        _Stats(
+          cells: <(String, String, bool)>[
+            (
+              rating == null ? 'None' : rating.toStringAsFixed(1),
+              'Rating',
+              rating != null,
+            ),
+            (formatCount(place.reviewCount), 'Reviews', false),
+            (formatDistance(place.distanceMetres), 'Away', false),
+          ],
+        ),
+        if (place.hours case final hours?) ...<Widget>[
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: <Widget>[
+              const Icon(
+                CupertinoIcons.clock,
+                size: 17,
+                color: AppColors.muted,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Flexible(
+                child: Text(
+                  hoursLine(hours, now),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.ink,
                   ),
                 ),
               ),
             ],
-            // Places from Google must say so; the demo's are made up.
-            if (!demoMode) ...<Widget>[
-              const SizedBox(height: AppSpacing.sm),
-              const Text(
-                'Google Maps',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: AppColors.muted),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// A place's kept reviews, a link to the rest on Google Maps, and the
+/// credit Google asks for.
+class PlaceReviews extends ConsumerWidget {
+  const PlaceReviews({super.key, required this.place});
+
+  final Place place;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final DateTime now = ref.read(clockProvider)();
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        if (place.reviews.isNotEmpty) ...<Widget>[
+          const SizedBox(height: AppSpacing.xxl),
+          Semantics(
+            header: true,
+            child: const Text(
+              'Reviews',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.3,
+                color: AppColors.ink,
               ),
-            ],
-          ],
-        ),
-      ),
+            ),
+          ),
+          for (final Review r in place.reviews)
+            _ReviewTile(
+              review: r,
+              now: now,
+              onReadMore: () => openInMaps(context, ref, place),
+            ),
+        ],
+        // The list keeps a few reviews; Google Maps has them all, in
+        // any order, newest first included.
+        if (place.reviewCount > place.reviews.length) ...<Widget>[
+          const SizedBox(height: AppSpacing.md),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () => openInMaps(context, ref, place),
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(48, 48),
+                textStyle: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+              child: Text(
+                place.reviewCount == 1
+                    ? 'Read the review on Google Maps'
+                    : 'Read all ${formatCount(place.reviewCount)} reviews on Google Maps',
+              ),
+            ),
+          ),
+        ],
+        // Places from Google must say so; the demo's are made up.
+        if (!demoMode) ...<Widget>[
+          const SizedBox(height: AppSpacing.sm),
+          const Text(
+            'Google Maps',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: AppColors.muted),
+          ),
+        ],
+      ],
     );
   }
 }

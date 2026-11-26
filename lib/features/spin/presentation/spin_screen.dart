@@ -16,8 +16,8 @@ import '../../places/domain/place.dart';
 import '../../places/domain/place_filters.dart';
 import '../../places/presentation/filters_button.dart';
 import '../../places/presentation/filters_sheet.dart';
+import '../../places/presentation/place_sheet.dart';
 import '../../places/presentation/places_providers.dart';
-import 'result_sheet.dart';
 import 'spin_wheel.dart';
 import 'wheel_painter.dart';
 import 'wheel_readout.dart';
@@ -70,7 +70,7 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
         : const Duration(milliseconds: 650);
     _result = Timer(flash, () {
       if (!mounted) return;
-      showResultSheet(
+      showPlaceSheet(
         context,
         place: place,
         onSpinAgain: () {
