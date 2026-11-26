@@ -126,7 +126,7 @@ class _PlacesMapState extends State<PlacesMap>
     with SingleTickerProviderStateMixin {
   MapLibreMapController? _map;
   bool _ready = false;
-  double _width = 400;
+  Size _size = const Size(412, 915);
   Timer? _ring;
   Timer? _bounce;
 
@@ -351,7 +351,13 @@ class _PlacesMapState extends State<PlacesMap>
       map.setGeoJsonSource('drop', _dropJson(_p.dropPin, 0));
     }
     if (was.you != _p.you) _showYou();
-    if (moved || was.recentre != _p.recentre) {
+    // Other places listed, as after a change of filters: frame them, unless
+    // a card is open.
+    final bool relisted =
+        !_sameIds(was.places, _p.places) &&
+        _p.selectedId == null &&
+        _p.aloneId == null;
+    if (moved || relisted || was.recentre != _p.recentre) {
       map.animateCamera(
         CameraUpdate.newCameraPosition(_home()),
         duration: _still ? Duration.zero : const Duration(milliseconds: 750),
@@ -379,11 +385,49 @@ class _PlacesMapState extends State<PlacesMap>
     );
   }
 
-  CameraPosition _home() => CameraPosition(
-    target: LatLng(_p.latitude, _p.longitude),
-    zoom: zoomToFit((_p.radiusMetres ?? 2000).toDouble(), _p.latitude, _width),
-    tilt: _p.tilted ? mapTilt : 0,
-  );
+  /// Where the camera comes home to: every listed place, and you, inside
+  /// the part of the map clear of the buttons over it. With nothing listed,
+  /// the search ring instead.
+  CameraPosition _home() {
+    final List<LatLon> points = <LatLon>[
+      for (final Place p in _p.places)
+        (latitude: p.latitude, longitude: p.longitude),
+      ?_p.you,
+    ];
+    if (_p.places.isEmpty) {
+      return CameraPosition(
+        target: LatLng(_p.latitude, _p.longitude),
+        zoom: zoomToFit(
+          (_p.radiusMetres ?? 2000).toDouble(),
+          _p.latitude,
+          _size.width,
+        ),
+        tilt: _p.tilted ? mapTilt : 0,
+      );
+    }
+    final EdgeInsets safe = MediaQuery.paddingOf(context);
+    final MapView v = frame(
+      points,
+      _size,
+      clear: EdgeInsets.fromLTRB(
+        AppSpacing.xl,
+        // The filters button and the round buttons beside it.
+        safe.top + 150,
+        AppSpacing.xl,
+        // Spin, and the tab bar under it.
+        AppNavMetrics.clearance(safe.bottom) + 56 + AppSpacing.lg,
+      ),
+    );
+    return CameraPosition(
+      target: LatLng(v.latitude, v.longitude),
+      zoom: v.zoom,
+      tilt: _p.tilted ? mapTilt : 0,
+    );
+  }
+
+  static bool _sameIds(List<Place> a, List<Place> b) =>
+      a.length == b.length &&
+      a.map((Place p) => p.id).toSet().containsAll(b.map((Place p) => p.id));
 
   Future<void> _styleLoaded() async {
     final MapLibreMapController map = _map!;
@@ -468,6 +512,11 @@ class _PlacesMapState extends State<PlacesMap>
       _raised.add(id);
       await map.setGeoJsonSource('places', _placesJson());
       await map.setGeoJsonSource('chosen', _chosenJson());
+    }
+    // The places usually arrive before the map is ready, when the camera
+    // could only frame the search ring: frame them now.
+    if (_p.aloneId == null && _p.places.isNotEmpty) {
+      await map.moveCamera(CameraUpdate.newCameraPosition(_home()));
     }
     // A place sent from the wheel can arrive before the map is ready, as
     // when it opens the Map tab for the first time: fly in on it now.
@@ -765,7 +814,7 @@ class _PlacesMapState extends State<PlacesMap>
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints c) {
-        _width = c.maxWidth;
+        _size = c.biggest;
         final Widget map = MapLibreMap(
           styleString: mapStyleUrl,
           initialCameraPosition: _home(),
