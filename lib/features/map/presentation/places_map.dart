@@ -144,6 +144,14 @@ class _PlacesMapState extends State<PlacesMap>
   Duration? _othersStart;
   Duration _now = Duration.zero;
 
+  /// What the map still has to be told. Only one update is in flight at a
+  /// time and the next one carries the latest state, so a slow map skips
+  /// frames instead of queueing them behind a tap.
+  bool _sending = false;
+  bool _sendChosen = false;
+  bool _sendPlaces = false;
+  bool _sendLayer = false;
+
   MapProps get _p => widget.props;
   bool get _still => MediaQuery.disableAnimationsOf(context);
 
@@ -181,7 +189,8 @@ class _PlacesMapState extends State<PlacesMap>
     _othersStart = null;
     if (_still) {
       _others = to;
-      _map?.setLayerProperties('place-pins', _pinLayer());
+      _sendLayer = true;
+      _flush();
       return;
     }
     _sendMoving();
@@ -191,8 +200,30 @@ class _PlacesMapState extends State<PlacesMap>
     final bool moving =
         _lifts.values.any((_Lift l) => !l.done) || _others != _othersTo;
     if (moving && !_ticker.isActive) _ticker.start();
-    _map?.setGeoJsonSource('chosen', _chosenJson());
-    _map?.setGeoJsonSource('places', _placesJson());
+    _sendChosen = true;
+    _sendPlaces = true;
+    _flush();
+  }
+
+  Future<void> _flush() async {
+    final MapLibreMapController? map = _map;
+    if (map == null || _sending) return;
+    _sending = true;
+    try {
+      while (mounted && (_sendChosen || _sendPlaces || _sendLayer)) {
+        final bool chosen = _sendChosen;
+        final bool places = _sendPlaces;
+        final bool layer = _sendLayer;
+        _sendChosen = _sendPlaces = _sendLayer = false;
+        await Future.wait(<Future<void>>[
+          if (chosen) map.setGeoJsonSource('chosen', _chosenJson()),
+          if (places) map.setGeoJsonSource('places', _placesJson()),
+          if (layer) map.setLayerProperties('place-pins', _pinLayer()),
+        ]);
+      }
+    } finally {
+      _sending = false;
+    }
   }
 
   void _tick(Duration now) {
@@ -207,8 +238,8 @@ class _PlacesMapState extends State<PlacesMap>
     // Settled pins that went back to rest return to the main layer.
     final int before = _lifts.length;
     _lifts.removeWhere((String _, _Lift l) => l.done && l.target == 0);
-    map.setGeoJsonSource('chosen', _chosenJson());
-    if (_lifts.length != before) map.setGeoJsonSource('places', _placesJson());
+    _sendChosen = true;
+    if (_lifts.length != before) _sendPlaces = true;
     if (_others != _othersTo) {
       final Duration start = _othersStart ??= now;
       final double t = ((now - start).inMicroseconds / 320000).clamp(0, 1);
@@ -217,9 +248,10 @@ class _PlacesMapState extends State<PlacesMap>
           : AppMotion.enter;
       _others = _othersFrom + (_othersTo - _othersFrom) * curve.transform(t);
       if (t >= 1) _others = _othersTo;
-      map.setLayerProperties('place-pins', _pinLayer());
+      _sendLayer = true;
       moving |= _others != _othersTo;
     }
+    _flush();
     if (!moving) _ticker.stop();
   }
 
