@@ -355,7 +355,9 @@ it through the tab's own guard (`TabBack`): Back shrinks the full sheet,
 then closes the card, before the tab's Back rules apply. A pin springing up
 or settling back is drawn by Flutter over the map, and handed back to the
 map once still: animated inside MapLibre, with a GeoJSON update every
-frame, it moved in steps up to 290 ms apart on a Pixel 9 Pro. If the map
-is panned during that half second, Flutter's pin does not follow. Double-tap
+frame, it moved in steps up to 290 ms apart on a Pixel 9 Pro. Flutter's pin
+cannot follow a moving map, so the moment the camera moves, whether you pan
+or closing a winner's card flies it out, the pin goes straight back to the
+map in its final pose. Double-tap
 zoom is off, since MapLibre holds back every single tap until it is sure
 no second tap is coming; pinch still zooms.

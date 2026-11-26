@@ -167,7 +167,14 @@ class _PlacesMapState extends State<PlacesMap>
   }
 
   /// Springs [id] up to stand chosen, and lets the pin chosen before settle.
-  Future<void> _choose(String? id, String? was) async {
+  /// With [cameraMoves], as when closing a winner's card flies the camera
+  /// out, the pins skip the spring: Flutter's copy would stay where the pin
+  /// stood on screen while the map moved under it.
+  Future<void> _choose(
+    String? id,
+    String? was, {
+    bool cameraMoves = false,
+  }) async {
     final List<String> moving = <String>[];
     if (was != null && was != id) {
       final bool up = _raised.remove(was) || _floats.containsKey(was);
@@ -181,7 +188,7 @@ class _PlacesMapState extends State<PlacesMap>
       (_floats[id] ??= _Float(0)).aim(1, _now);
       moving.add(id);
     }
-    if (_still) {
+    if (_still || cameraMoves) {
       _floats.clear();
       if (id != null) _raised.add(id);
       _sendChosen = _sendPlaces = true;
@@ -213,6 +220,22 @@ class _PlacesMapState extends State<PlacesMap>
         _floats[p.id]?.at = Offset(at[i].x.toDouble(), at[i].y.toDouble());
       }
     });
+  }
+
+  /// The camera has started to move: every pin Flutter is drawing goes
+  /// straight back to the map in its final pose, so it moves with the map.
+  void _settleFloats() {
+    if (_floats.isEmpty) return;
+    for (final MapEntry<String, _Float> e in _floats.entries) {
+      if (e.value.lift.target == 1) {
+        _raised.add(e.key);
+      } else {
+        _raised.remove(e.key);
+      }
+    }
+    setState(_floats.clear);
+    _sendChosen = _sendPlaces = true;
+    _flush();
   }
 
   void _hideOthers(bool hide) {
@@ -299,6 +322,10 @@ class _PlacesMapState extends State<PlacesMap>
     if (!_ready) return;
     final MapProps was = old.props;
     final MapLibreMapController map = _map!;
+    final bool moved =
+        was.latitude != _p.latitude ||
+        was.longitude != _p.longitude ||
+        was.radiusMetres != _p.radiusMetres;
     if (was.selectedId != _p.selectedId) {
       final String? id = _p.selectedId;
       final String? before = was.selectedId;
@@ -309,7 +336,7 @@ class _PlacesMapState extends State<PlacesMap>
           if (mounted && _p.selectedId == id) _choose(id, before);
         });
       } else {
-        _choose(id, before);
+        _choose(id, before, cameraMoves: moved || was.recentre != _p.recentre);
       }
     } else if (was.places != _p.places) {
       map.setGeoJsonSource('places', _placesJson());
@@ -319,10 +346,6 @@ class _PlacesMapState extends State<PlacesMap>
       map.setGeoJsonSource('places', _placesJson());
       _hideOthers(_p.aloneId != null);
     }
-    final bool moved =
-        was.latitude != _p.latitude ||
-        was.longitude != _p.longitude ||
-        was.radiusMetres != _p.radiusMetres;
     if (moved) map.setGeoJsonSource('area', _areaJson());
     if (was.dropPin != _p.dropPin) {
       map.setGeoJsonSource('drop', _dropJson(_p.dropPin, 0));
@@ -752,6 +775,7 @@ class _PlacesMapState extends State<PlacesMap>
             map.onFeatureDrag.add(_featureDragged);
           },
           onStyleLoadedCallback: _styleLoaded,
+          onCameraMoveStarted: (_) => _settleFloats(),
           onMapClick: (_, _) => _p.onMapTap(),
           compassEnabled: false,
           // MapLibre holds back a single tap until the double-tap timeout,
