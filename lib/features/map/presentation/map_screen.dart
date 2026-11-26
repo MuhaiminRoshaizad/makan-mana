@@ -739,10 +739,10 @@ class _HandOverState extends State<_HandOver>
     return AnimatedBuilder(
       animation: _a,
       builder: (BuildContext context, Widget? child) {
+        // Both arrive past their place a little and settle, as the pins do.
         final double t = _a.status == AnimationStatus.reverse
             ? Curves.easeIn.transform(_a.value)
-            : (card ? AppMotion.enter : const Cubic(0.3, 1.4, 0.5, 1))
-                  .transform(_a.value);
+            : const Cubic(0.3, 1.4, 0.5, 1).transform(_a.value);
         return Opacity(
           opacity: _a.value.clamp(0, 1),
           child: card
