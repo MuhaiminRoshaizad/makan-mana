@@ -398,3 +398,19 @@ separator ("Kopi Saigon Pokok Sena Penang"), stays, and a name in mixed case
 is never touched, so "GDGN Vintage Cuisine SUNWAY CARNIVAL MALL" keeps its
 capitals. Notes in a name such as "Halal certified" are dropped from the
 display, though they stay in Google's name.
+
+## 024: Every sheet pulls down like the place card (27/11/2026)
+
+**Decided:** `showAppSheet` draws its own sheet and backdrop instead of
+using `showModalBottomSheet`. A pull from the handle or from content at its
+top moves the whole sheet with the finger, and the backdrop lightens as it
+goes. A quarter of the sheet's height or a flick down closes it, falling on
+at the speed of the flick; less springs it back with the app's spring. A
+sheet is as tall as its content, at most just below the status bar when it
+is scroll controlled (Filters), and never taller than the place card at full
+height. Demo: https://claude.ai/artifact/RWcPk78BKprx2sVsLLRdei
+
+**Why:** the first version moved only the content inside Flutter's sheet,
+and the sheet itself stayed put. A pull on the Filters looked like the
+content stretching, and the handle, the one part Flutter dragged, felt
+different from the rest.
