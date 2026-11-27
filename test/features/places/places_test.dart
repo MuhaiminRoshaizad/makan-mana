@@ -97,9 +97,10 @@ void main() {
       expect(f.passes(place(rating: null)), isFalse);
     });
 
-    test('keep one whose hours are not known yet, rather than empty the '
-        'wheel while the list is filled in', () {
-      expect(f.passes(place(open: null)), isTrue);
+    test('drop one whose hours are not known, so Open now means known to '
+        'be open', () {
+      expect(f.passes(place(open: null)), isFalse);
+      expect(f.copyWith(openNow: false).passes(place(open: null)), isTrue);
     });
   });
 

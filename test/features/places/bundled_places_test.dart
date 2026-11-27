@@ -150,8 +150,26 @@ void main() {
           placesRepositoryProvider.overrideWithValue(
             BundledPlacesRepository(
               load: () async => file(<Map<String, Object?>>[
+                // Open all day, every day: Open now starts on and leaves
+                // out places whose hours are not known.
                 for (int i = 0; i < 60; i++)
-                  entry('p$i', lat: 5.5 + i * 0.0001),
+                  <String, Object?>{
+                    ...entry('p$i', lat: 5.5 + i * 0.0001),
+                    'hours': <String, Object?>{
+                      for (final String d in <String>[
+                        'mon',
+                        'tue',
+                        'wed',
+                        'thu',
+                        'fri',
+                        'sat',
+                        'sun',
+                      ])
+                        d: <List<int>>[
+                          <int>[0, 1440],
+                        ],
+                    },
+                  },
               ]),
             ),
           ),

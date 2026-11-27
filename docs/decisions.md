@@ -238,8 +238,9 @@ still has the ratings and review counts the filters need.
 **Costs:** places exist only where the list covers, 15 km round the office.
 Ratings can be up to a month old, and a place's weekly hours and its five
 reviews up to three months. Five, in Google's "most relevant" order, is all
-Google shows a visitor who is not signed in; the rest are a link away. Places not yet given hours count as unknown, and
-Open now keeps them rather than empty the wheel while the list fills in. A
+Google shows a visitor who is not signed in; the rest are a link away. Places without hours count as unknown. Since
+27/11/2026, with every place scraped, Open now leaves them out (117 of the
+1,008 that pass the default filters), and a card says "Hours not known". A
 new list means a new build, and a build made elsewhere, such as on CI, has no
 places at all.
 

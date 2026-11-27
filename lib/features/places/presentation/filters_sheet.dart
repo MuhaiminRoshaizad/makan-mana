@@ -184,7 +184,7 @@ class _FiltersSheetState extends ConsumerState<FiltersSheet> {
               ),
               child: Text(
                 'Opening hours come from Google Maps and can be out of date. '
-                'Places whose hours are not known stay on.',
+                'Places whose hours are not known are left out.',
                 style: TextStyle(
                   fontSize: 13,
                   height: 1.45,
