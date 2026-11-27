@@ -144,18 +144,14 @@ class PlaceSummary extends ConsumerWidget {
             (formatDistance(place.distanceMetres), 'Away', false),
           ],
         ),
-        if (place.hours case final hours?) ...<Widget>[
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: <Widget>[
-              const Icon(
-                CupertinoIcons.clock,
-                size: 17,
-                color: AppColors.muted,
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Flexible(
-                child: Text(
+        const SizedBox(height: AppSpacing.md),
+        Row(
+          children: <Widget>[
+            const Icon(CupertinoIcons.clock, size: 17, color: AppColors.muted),
+            const SizedBox(width: AppSpacing.sm),
+            Flexible(
+              child: switch (place.hours) {
+                final hours? => Text(
                   hoursLine(hours, now),
                   style: const TextStyle(
                     fontSize: 15,
@@ -163,10 +159,17 @@ class PlaceSummary extends ConsumerWidget {
                     color: AppColors.ink,
                   ),
                 ),
-              ),
-            ],
-          ),
-        ],
+                // Many small kedai list no hours on Google but are open at
+                // lunch, so they stay on the wheel with Open now on, and the
+                // card warns that they might be closed.
+                null => const Text(
+                  'Hours not known',
+                  style: TextStyle(fontSize: 15, color: AppColors.muted),
+                ),
+              },
+            ),
+          ],
+        ),
       ],
     );
   }

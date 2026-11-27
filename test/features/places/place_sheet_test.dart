@@ -259,11 +259,11 @@ void main() {
     expect(opened.single.queryParameters['query_place_id'], 'ChIJ-kafe');
   });
 
-  testWidgets('a place without hours or reviews shows neither', (
-    WidgetTester tester,
-  ) async {
+  testWidgets('a place without hours says they are not known; without '
+      'reviews it has no reviews heading', (WidgetTester tester) async {
     await show(tester);
     expect(find.textContaining('Open until'), findsNothing);
+    expect(find.text('Hours not known'), findsOneWidget);
     // Only the figures card's label, no reviews heading.
     expect(find.text('Reviews'), findsOneWidget);
   });
