@@ -370,6 +370,12 @@ or closing a winner's card flies it out, the pin goes straight back to the
 map in its final pose. Double-tap
 zoom is off, since MapLibre holds back every single tap until it is sure
 no second tap is coming; pinch still zooms.
+
+**Names on the map (27/11/2026):** pins carry no names. A tapped pin's
+name is on its card, and a name under every pin turned a busy area into a
+wall of text. Only a spin's winner shows its name under its pin, for as
+long as it is alone on the map, card open or closed; Show all takes the
+name away with the rest. Demo: https://claude.ai/artifact/WPcvTm3s2wLiaRmiNDhHYu
 ## 023: Place names are tidied for showing (27/11/2026)
 
 **Decided:** the app shows each place under a tidied name, worked out by

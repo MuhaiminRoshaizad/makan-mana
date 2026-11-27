@@ -113,6 +113,18 @@ const List<String> _styleLayersToHide = <String>['poi_r1', 'poi_r7', 'poi_r20'];
 /// The blue of the dot that marks the phone, as on every map app.
 const Color _youBlue = Color(0xFF2F6FC9);
 
+/// The name under a pin: only a spin's winner, while it is alone on the
+/// map, has one. Every other pin goes without, since tapping it opens its
+/// card with the name, and a name under each pin made a busy area a wall of
+/// text (decision 022).
+@visibleForTesting
+const List<Object> pinNameField = <Object>[
+  'case',
+  <Object>['get', 'alone'],
+  <Object>['get', 'name'],
+  '',
+];
+
 /// The map of the places on the wheel, drawn by MapLibre.
 class PlacesMap extends StatefulWidget {
   const PlacesMap({super.key, required this.props});
@@ -632,7 +644,7 @@ class _PlacesMapState extends State<PlacesMap>
       if (_raised.contains(p.id))
         _point(
           (latitude: p.latitude, longitude: p.longitude),
-          _placeProps(i, p),
+          <String, dynamic>{..._placeProps(i, p), 'alone': p.id == _p.aloneId},
           p.id,
         ),
   ]);
@@ -671,7 +683,7 @@ class _PlacesMapState extends State<PlacesMap>
         1.0,
         k,
       ],
-      textField: <Object>['get', 'name'],
+      textField: pinNameField,
       textFont: <String>['Noto Sans Bold'],
       textSize: 12.5,
       textAnchor: 'top',
@@ -693,7 +705,7 @@ class _PlacesMapState extends State<PlacesMap>
     iconIgnorePlacement: true,
     iconSize: _raisedScale,
     iconOffset: <double>[0, -_raisedLift / _raisedScale],
-    textField: <Object>['get', 'name'],
+    textField: pinNameField,
     textFont: <String>['Noto Sans Bold'],
     textSize: 12.5,
     textAnchor: 'top',
