@@ -21,6 +21,7 @@ import '../../places/presentation/place_card.dart';
 import '../../places/presentation/places_providers.dart';
 import 'pin_images.dart';
 import 'places_map.dart';
+import '../../places/domain/place_name.dart';
 
 /// The Map tab: the places on the wheel, round you or a pin you drop.
 class MapScreen extends ConsumerStatefulWidget {
@@ -345,7 +346,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 child: alone != null
                     ? _AloneBar(
                         key: const ValueKey<String>('alone'),
-                        name: alone.name,
+                        name: alone.shownName.title,
                         onShowAll: () =>
                             ref.read(aloneOnMapProvider.notifier).clear(),
                       )

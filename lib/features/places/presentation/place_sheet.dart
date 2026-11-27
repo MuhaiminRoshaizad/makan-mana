@@ -9,6 +9,7 @@ import '../domain/review.dart';
 import 'hours_text.dart';
 import 'maps_link.dart';
 import 'places_providers.dart';
+import '../domain/place_name.dart';
 
 /// The ways onward from a place: Google Maps first, then, where given,
 /// seeing it alone on the map and spinning again.
@@ -119,7 +120,7 @@ class PlaceSummary extends ConsumerWidget {
           child: Semantics(
             header: true,
             child: Text(
-              place.name,
+              place.shownName.title,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -132,6 +133,24 @@ class PlaceSummary extends ConsumerWidget {
             ),
           ),
         ),
+        // The name on the sign in another script, such as a kopitiam's
+        // Chinese, for those who read it.
+        if (place.shownName.other case final String other) ...<Widget>[
+          const SizedBox(height: AppSpacing.xs),
+          Padding(
+            padding: EdgeInsets.only(right: nameEndGap),
+            child: Text(
+              other,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: compact ? 14 : 16,
+                fontWeight: FontWeight.w600,
+                color: AppColors.muted,
+              ),
+            ),
+          ),
+        ],
         SizedBox(height: compact ? AppSpacing.md : AppSpacing.lg),
         _Stats(
           cells: <(String, String, bool)>[

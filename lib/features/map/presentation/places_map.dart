@@ -14,6 +14,7 @@ import '../../places/domain/place.dart';
 import '../../places/domain/places_repository.dart';
 import 'map_geometry.dart';
 import 'pin_images.dart';
+import '../../places/domain/place_name.dart';
 
 /// Everything the map shows, so the screen can say what it wants and the
 /// map works out what to change.
@@ -603,7 +604,7 @@ class _PlacesMapState extends State<PlacesMap>
 
   Map<String, dynamic> _placeProps(int i, Place p) => <String, dynamic>{
     'id': p.id,
-    'name': p.name,
+    'name': p.shownName.title,
     'icon': 'pin-${wedgeColors.indexOf(wedgeColorFor(i, _p.places.length))}',
   };
 

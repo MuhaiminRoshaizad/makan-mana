@@ -259,6 +259,26 @@ void main() {
     expect(opened.single.queryParameters['query_place_id'], 'ChIJ-kafe');
   });
 
+  testWidgets('the card shows the tidied name, with the name in another '
+      'script under it', (WidgetTester tester) async {
+    await show(
+      tester,
+      place: const Place(
+        id: 'ChIJ-union',
+        name: 'UNION CAFE 友联茶室 • Kepala Batas',
+        rating: 4.3,
+        reviewCount: 300,
+        latitude: 0,
+        longitude: 0,
+        distanceMetres: 800,
+        openNow: true,
+      ),
+    );
+    expect(find.text('Union Cafe'), findsOneWidget);
+    expect(find.text('友联茶室'), findsOneWidget);
+    expect(find.textContaining('Kepala Batas'), findsNothing);
+  });
+
   testWidgets('a place without hours says they are not known; without '
       'reviews it has no reviews heading', (WidgetTester tester) async {
     await show(tester);

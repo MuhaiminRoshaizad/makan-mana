@@ -12,6 +12,7 @@ import '../../../core/widgets/nav_cover.dart';
 import '../../../core/widgets/tab_back.dart';
 import '../domain/place.dart';
 import 'place_sheet.dart';
+import '../domain/place_name.dart';
 
 /// A place as a card over its tab, which grows into the full sheet: pulled
 /// up, or tapped, it widens to the screen's edges and rises to the top, and
@@ -347,7 +348,7 @@ class _PlaceCardHostState extends ConsumerState<PlaceCardHost>
   Widget _content(Place place, double systemBottom) {
     return Semantics(
       container: true,
-      label: 'Show more about ${place.name}',
+      label: 'Show more about ${place.shownName.title}',
       onTap: () => _settle(1),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,

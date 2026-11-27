@@ -21,6 +21,7 @@ import '../../places/presentation/places_providers.dart';
 import 'spin_wheel.dart';
 import 'wheel_painter.dart';
 import 'wheel_readout.dart';
+import '../../places/domain/place_name.dart';
 
 /// The Spin tab: how many places made it onto the wheel, the one under the
 /// arrow in large type, and the wheel rising from behind the tab bar with
@@ -136,7 +137,7 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
         top: _readout(list),
         wheel: SpinWheel(
           key: _wheel,
-          names: <String>[for (final Place p in list) p.name],
+          names: <String>[for (final Place p in list) p.shownName.title],
           labelsEndAbove: _ArcLayout.labelsEndAbove(context),
           onLanded: (int i) => _landed(list[i]),
           onCurrent: (int i) => setState(() => _current = i),
@@ -179,7 +180,7 @@ class _SpinScreenState extends ConsumerState<SpinScreen> {
       count: list.length == 1
           ? '1 place on the wheel'
           : '${list.length} places on the wheel',
-      name: here?.name ?? '',
+      name: here?.shownName.title ?? '',
       detail: here == null ? '' : _detail(here),
       align: screen.width > screen.height ? TextAlign.start : TextAlign.center,
     );

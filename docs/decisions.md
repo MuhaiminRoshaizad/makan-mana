@@ -370,3 +370,24 @@ or closing a winner's card flies it out, the pin goes straight back to the
 map in its final pose. Double-tap
 zoom is off, since MapLibre holds back every single tap until it is sure
 no second tap is coming; pinch still zooms.
+## 023: Place names are tidied for showing (27/11/2026)
+
+**Decided:** the app shows each place under a tidied name, worked out by
+`cleanName` in `place_name.dart`; Google's own name stays on the place for
+the Maps link and the kind rules. Shouted or all-lowercase names get title
+case, a place or branch after a separator or in brackets goes ("Baeshake
+Cafe | Bertam, Penang" is "Baeshake Cafe"), as do menu notes, company
+suffixes, registration numbers and emoji. A name in two scripts shows its
+English or Malay part as the heading and the Chinese, Thai or Tamil under it
+in smaller grey type (the user's choice, B). A name with no Latin letters is
+shown as it is. Spelling is left as the owner wrote it.
+
+**Why:** 471 names were in capitals, 348 carried a town the card already
+gives as a distance, and 204 of the places that pass the default filters ran
+past 30 characters, crowding the wheel and the card.
+
+**Costs:** the rules guess. A place word in the middle of a name, with no
+separator ("Kopi Saigon Pokok Sena Penang"), stays, and a name in mixed case
+is never touched, so "GDGN Vintage Cuisine SUNWAY CARNIVAL MALL" keeps its
+capitals. Notes in a name such as "Halal certified" are dropped from the
+display, though they stay in Google's name.
