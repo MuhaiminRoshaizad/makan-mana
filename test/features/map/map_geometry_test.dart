@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:makan_mana/features/map/presentation/map_geometry.dart';
 import 'package:makan_mana/features/places/domain/places_repository.dart';
 
+// The geometry holds anywhere, so the points below are round central Kuala
+// Lumpur. This file is public: never put a real home or office in it.
 void main() {
   test('the search ring closes, and every point is the radius away', () {
     const double lat = 3.139;
